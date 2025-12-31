@@ -7,18 +7,16 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Logger, UseFilters, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { UserMessageDto, AssistantResponseDto } from './dto/message.dto';
-import { WsExceptionFilter } from './filters/ws-exception.filter';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: '*',
     credentials: true,
   },
 })
-@UseFilters(new WsExceptionFilter())
 export class AssistantGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -36,13 +34,20 @@ export class AssistantGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   @SubscribeMessage('user_message')
   handleUserMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: UserMessageDto,
   ): void {
     try {
+      if (!data || typeof data.text !== 'string' || data.text.trim() === '') {
+        client.emit('error', {
+          message: 'Invalid message format. Expected { text: string }',
+          code: 'INVALID_MESSAGE',
+        });
+        return;
+      }
+
       const response: AssistantResponseDto = {
         text: `Echo: ${data.text}`,
         timestamp: Date.now(),
@@ -50,11 +55,7 @@ export class AssistantGateway
 
       client.emit('assistant_response', response);
     } catch (error) {
-      const err = error as Error;
-      this.logger.error(
-        `Error handling user message: ${err.message}`,
-        err.stack,
-      );
+      this.logger.error(`Error handling user message: ${error}`);
       client.emit('error', {
         message: 'An error occurred while processing your message',
         code: 'PROCESSING_ERROR',

@@ -56,6 +56,51 @@ describe('AssistantGateway', () => {
       );
     });
 
+    it('should emit error for empty text', () => {
+      const messageData = { text: '' };
+
+      gateway.handleUserMessage(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Invalid message format. Expected { text: string }',
+        code: 'INVALID_MESSAGE',
+      });
+    });
+
+    it('should emit error for missing text property', () => {
+      const messageData = {} as { text: string };
+
+      gateway.handleUserMessage(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Invalid message format. Expected { text: string }',
+        code: 'INVALID_MESSAGE',
+      });
+    });
+
+    it('should emit error for null data', () => {
+      gateway.handleUserMessage(
+        mockSocket as Socket,
+        null as unknown as { text: string },
+      );
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Invalid message format. Expected { text: string }',
+        code: 'INVALID_MESSAGE',
+      });
+    });
+
+    it('should emit error for non-string text', () => {
+      const messageData = { text: 123 } as unknown as { text: string };
+
+      gateway.handleUserMessage(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Invalid message format. Expected { text: string }',
+        code: 'INVALID_MESSAGE',
+      });
+    });
+
     it('should include timestamp in response', () => {
       const beforeTime = Date.now();
       const messageData = { text: 'Test message' };
