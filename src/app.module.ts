@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { configValidationSchema } from './config/config.schema';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { configValidationSchema } from './config/config.schema';
       envFilePath: ['.env.local', '.env'],
       validationSchema: configValidationSchema,
     }),
+    GatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],
