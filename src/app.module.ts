@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { configValidationSchema } from './config/config.schema';
 import { GatewayModule } from './gateway/gateway.module';
+import { SessionModule } from './session/session.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { GatewayModule } from './gateway/gateway.module';
       envFilePath: ['.env.local', '.env'],
       validationSchema: configValidationSchema,
     }),
+    SessionModule,
     GatewayModule,
   ],
   controllers: [AppController],
