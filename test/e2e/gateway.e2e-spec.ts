@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { io, Socket } from 'socket.io-client';
 import { AppModule } from '@/app.module';
+import { SessionService } from '@/session/session.service';
 
 describe('AssistantGateway (e2e)', () => {
   let app: INestApplication;
   let clientSocket: Socket;
+  let sessionService: SessionService;
   const port = 3001;
 
   beforeAll(async () => {
@@ -14,10 +16,12 @@ describe('AssistantGateway (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    sessionService = moduleFixture.get<SessionService>(SessionService);
     await app.listen(port);
   });
 
   afterAll(async () => {
+    sessionService.clearAllSessions();
     await app.close();
   });
 
@@ -42,18 +46,41 @@ describe('AssistantGateway (e2e)', () => {
       expect(clientSocket.connected).toBe(true);
     });
 
-    it('should receive connected event with clientId', (done) => {
+    it('should receive connected event with clientId and sessionId', (done) => {
       const newSocket = io(`http://localhost:${port}`, {
         transports: ['websocket'],
         forceNew: true,
       });
 
-      newSocket.on('connected', (data: { clientId: string }) => {
-        expect(data).toHaveProperty('clientId');
-        expect(typeof data.clientId).toBe('string');
-        newSocket.disconnect();
-        done();
+      newSocket.on(
+        'connected',
+        (data: { clientId: string; sessionId: string }) => {
+          expect(data).toHaveProperty('clientId');
+          expect(data).toHaveProperty('sessionId');
+          expect(typeof data.clientId).toBe('string');
+          expect(typeof data.sessionId).toBe('string');
+          expect(data.clientId).toBe(data.sessionId);
+          newSocket.disconnect();
+          done();
+        },
+      );
+    });
+
+    it('should receive session_created event', (done) => {
+      const newSocket = io(`http://localhost:${port}`, {
+        transports: ['websocket'],
+        forceNew: true,
       });
+
+      newSocket.on(
+        'session_created',
+        (data: { sessionId: string; expiresAt: string }) => {
+          expect(data).toHaveProperty('sessionId');
+          expect(data).toHaveProperty('expiresAt');
+          newSocket.disconnect();
+          done();
+        },
+      );
     });
   });
 
@@ -100,6 +127,24 @@ describe('AssistantGateway (e2e)', () => {
 
       clientSocket.emit('user_message', malformedMessage);
     });
+
+    it('should handle multiple messages in sequence', (done) => {
+      const messages = ['First', 'Second', 'Third'];
+      let receivedCount = 0;
+
+      clientSocket.on('assistant_response', (response: { text: string }) => {
+        receivedCount++;
+        expect(response.text).toBe(`Echo: ${messages[receivedCount - 1]}`);
+
+        if (receivedCount === messages.length) {
+          done();
+        }
+      });
+
+      messages.forEach((text) => {
+        clientSocket.emit('user_message', { text });
+      });
+    });
   });
 
   describe('disconnection', () => {
@@ -110,6 +155,28 @@ describe('AssistantGateway (e2e)', () => {
       });
 
       clientSocket.disconnect();
+    });
+
+    it('should mark session as disconnected on client disconnect', (done) => {
+      // Create a new socket specifically for this test to capture the connected event
+      const testSocket = io(`http://localhost:${port}`, {
+        transports: ['websocket'],
+        forceNew: true,
+      });
+
+      let sessionId: string;
+
+      testSocket.on('connected', (data: { sessionId: string }) => {
+        sessionId = data.sessionId;
+        testSocket.disconnect();
+      });
+
+      testSocket.on('disconnect', () => {
+        setTimeout(() => {
+          expect(sessionService.hasDisconnectedSession(sessionId)).toBe(true);
+          done();
+        }, 100);
+      });
     });
   });
 });
