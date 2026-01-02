@@ -13,6 +13,7 @@ import { UserMessageDto, AssistantResponseDto } from './dto/message.dto';
 import { SessionService } from '../session/session.service';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
+import { AIService } from '../ai/ai.service';
 
 @WebSocketGateway({
   cors: {
@@ -28,7 +29,10 @@ export class AssistantGateway
 
   private readonly logger = new Logger(AssistantGateway.name);
 
-  constructor(private readonly sessionService: SessionService) {}
+  constructor(
+    private readonly sessionService: SessionService,
+    private readonly aiService: AIService,
+  ) {}
 
   handleConnection(client: Socket): void {
     this.logger.log(`Client connected: ${client.id}`);
@@ -76,10 +80,10 @@ export class AssistantGateway
   }
 
   @SubscribeMessage('user_message')
-  handleUserMessage(
+  async handleUserMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: UserMessageDto,
-  ): void {
+  ): Promise<void> {
     try {
       if (!data || typeof data.text !== 'string' || data.text.trim() === '') {
         client.emit('error', {
@@ -101,8 +105,14 @@ export class AssistantGateway
       // Add user message to history
       this.sessionService.addMessage(client.id, MessageRole.USER, data.text);
 
+      // Get conversation history for AI context
+      const history = this.sessionService.getConversationHistory(client.id);
+
+      // Generate AI response
+      const result = await this.aiService.generateCompletion(history);
+
       const response: AssistantResponseDto = {
-        text: `Echo: ${data.text}`,
+        text: result.content,
         timestamp: Date.now(),
       };
 
@@ -116,6 +126,71 @@ export class AssistantGateway
       client.emit('assistant_response', response);
     } catch (error) {
       this.logger.error(`Error handling user message: ${error}`);
+      client.emit('error', {
+        message: 'An error occurred while processing your message',
+        code: 'PROCESSING_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('user_message_stream')
+  async handleUserMessageStream(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: UserMessageDto,
+  ): Promise<void> {
+    try {
+      if (!data || typeof data.text !== 'string' || data.text.trim() === '') {
+        client.emit('error', {
+          message: 'Invalid message format. Expected { text: string }',
+          code: 'INVALID_MESSAGE',
+        });
+        return;
+      }
+
+      // Check if session exists
+      if (!this.sessionService.hasSession(client.id)) {
+        client.emit('error', {
+          message: 'Session not found or expired',
+          code: 'SESSION_NOT_FOUND',
+        });
+        return;
+      }
+
+      // Add user message to history
+      this.sessionService.addMessage(client.id, MessageRole.USER, data.text);
+
+      // Get conversation history for AI context
+      const history = this.sessionService.getConversationHistory(client.id);
+
+      // Emit stream start
+      client.emit('stream_start', { timestamp: Date.now() });
+
+      let fullResponse = '';
+
+      // Generate streaming AI response
+      for await (const chunk of this.aiService.generateStream(history)) {
+        fullResponse += chunk.content;
+        client.emit('stream_chunk', {
+          content: chunk.content,
+          done: chunk.done,
+        });
+      }
+
+      // Add complete assistant response to history
+      if (fullResponse) {
+        this.sessionService.addMessage(
+          client.id,
+          MessageRole.ASSISTANT,
+          fullResponse,
+        );
+      }
+
+      client.emit('stream_end', {
+        timestamp: Date.now(),
+        fullResponse,
+      });
+    } catch (error) {
+      this.logger.error(`Error handling streaming message: ${error}`);
       client.emit('error', {
         message: 'An error occurred while processing your message',
         code: 'PROCESSING_ERROR',

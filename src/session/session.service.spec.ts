@@ -36,8 +36,12 @@ describe('SessionService', () => {
       const config = service.getConfig();
       expect(config.ttlMs).toBe(SESSION_DEFAULTS.TTL_MS);
       expect(config.maxHistoryLength).toBe(SESSION_DEFAULTS.MAX_HISTORY_LENGTH);
-      expect(config.cleanupIntervalMs).toBe(SESSION_DEFAULTS.CLEANUP_INTERVAL_MS);
-      expect(config.disconnectGraceMs).toBe(SESSION_DEFAULTS.DISCONNECT_GRACE_MS);
+      expect(config.cleanupIntervalMs).toBe(
+        SESSION_DEFAULTS.CLEANUP_INTERVAL_MS,
+      );
+      expect(config.disconnectGraceMs).toBe(
+        SESSION_DEFAULTS.DISCONNECT_GRACE_MS,
+      );
     });
 
     it('should load custom configuration from ConfigService', async () => {
@@ -80,7 +84,9 @@ describe('SessionService', () => {
         moduleWithoutConfig.get<SessionService>(SessionService);
 
       expect(serviceWithoutConfig).toBeDefined();
-      expect(serviceWithoutConfig.getConfig().ttlMs).toBe(SESSION_DEFAULTS.TTL_MS);
+      expect(serviceWithoutConfig.getConfig().ttlMs).toBe(
+        SESSION_DEFAULTS.TTL_MS,
+      );
 
       serviceWithoutConfig.onModuleDestroy();
     });
