@@ -170,10 +170,8 @@ export class SessionService implements OnModuleDestroy {
     const message = new SessionMessageDto(role, content);
     session.conversationHistory.push(message);
 
-    if (session.conversationHistory.length > this.config.maxHistoryLength) {
-      session.conversationHistory = session.conversationHistory.slice(
-        -this.config.maxHistoryLength,
-      );
+    while (session.conversationHistory.length > this.config.maxHistoryLength) {
+      session.conversationHistory.shift();
     }
 
     this.touchSession(clientId);

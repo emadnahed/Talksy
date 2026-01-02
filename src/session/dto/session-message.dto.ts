@@ -5,9 +5,9 @@ export enum MessageRole {
 }
 
 export class SessionMessageDto {
-  role: MessageRole;
-  content: string;
-  timestamp: number;
+  readonly role: MessageRole;
+  readonly content: string;
+  readonly timestamp: number;
 
   constructor(role: MessageRole, content: string, timestamp?: number) {
     this.role = role;

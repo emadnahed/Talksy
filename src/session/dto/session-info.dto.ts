@@ -1,13 +1,13 @@
 import { SessionStatus } from '../interfaces/session.interface';
 
 export class SessionInfoDto {
-  sessionId: string;
-  status: SessionStatus;
-  createdAt: string;
-  lastActivityAt: string;
-  expiresAt: string;
-  disconnectedAt?: string;
-  messageCount: number;
+  readonly sessionId: string;
+  readonly status: SessionStatus;
+  readonly createdAt: string;
+  readonly lastActivityAt: string;
+  readonly expiresAt: string;
+  readonly disconnectedAt?: string;
+  readonly messageCount: number;
 
   constructor(
     sessionId: string,
