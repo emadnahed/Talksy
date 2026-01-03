@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssistantGateway } from './assistant.gateway';
 import { SessionService } from '../session/session.service';
+import { ToolRegistryService } from '../tools/services/tool-registry.service';
+import { ToolExecutorService } from '../tools/services/tool-executor.service';
 import { Socket } from 'socket.io';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
@@ -47,10 +49,28 @@ describe('AssistantGateway', () => {
       touchSession: jest.fn().mockReturnValue(true),
     };
 
+    const mockToolRegistryService = {
+      getToolDefinitionDtos: jest.fn().mockReturnValue([]),
+      getToolsByCategory: jest.fn().mockReturnValue([]),
+      getToolDefinition: jest.fn().mockReturnValue(null),
+      hasTool: jest.fn().mockReturnValue(false),
+    };
+
+    const mockToolExecutorService = {
+      executeAsDto: jest.fn().mockResolvedValue({
+        callId: 'test-call-id',
+        toolName: 'test-tool',
+        result: { success: true, data: {}, executionTimeMs: 10 },
+        timestamp: Date.now(),
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssistantGateway,
         { provide: SessionService, useValue: mockSessionService },
+        { provide: ToolRegistryService, useValue: mockToolRegistryService },
+        { provide: ToolExecutorService, useValue: mockToolExecutorService },
       ],
     }).compile();
 
@@ -74,7 +94,9 @@ describe('AssistantGateway', () => {
       expect(sessionService.hasDisconnectedSession).toHaveBeenCalledWith(
         'test-socket-id',
       );
-      expect(sessionService.createSession).toHaveBeenCalledWith('test-socket-id');
+      expect(sessionService.createSession).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
       expect(mockSocket.emit).toHaveBeenCalledWith('connected', {
         clientId: 'test-socket-id',
         sessionId: 'test-socket-id',
@@ -127,7 +149,9 @@ describe('AssistantGateway', () => {
       expect(sessionService.reconnectSession).toHaveBeenCalledWith(
         'test-socket-id',
       );
-      expect(sessionService.createSession).toHaveBeenCalledWith('test-socket-id');
+      expect(sessionService.createSession).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
     });
   });
 
@@ -307,8 +331,13 @@ describe('AssistantGateway', () => {
     it('should emit session info', () => {
       gateway.handleGetSessionInfo(mockSocket as Socket);
 
-      expect(sessionService.getSessionInfo).toHaveBeenCalledWith('test-socket-id');
-      expect(mockSocket.emit).toHaveBeenCalledWith('session_info', mockSessionInfo);
+      expect(sessionService.getSessionInfo).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'session_info',
+        mockSessionInfo,
+      );
     });
 
     it('should emit error when session not found', () => {

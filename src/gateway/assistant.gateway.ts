@@ -13,6 +13,13 @@ import { UserMessageDto, AssistantResponseDto } from './dto/message.dto';
 import { SessionService } from '../session/session.service';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
+import { ToolRegistryService } from '../tools/services/tool-registry.service';
+import { ToolExecutorService } from '../tools/services/tool-executor.service';
+import {
+  ToolCallRequestDto,
+  ToolListResponseDto,
+} from '../tools/dto/tool-call.dto';
+import { ToolCategory } from '../tools/interfaces/tool.interface';
 
 @WebSocketGateway({
   cors: {
@@ -28,7 +35,11 @@ export class AssistantGateway
 
   private readonly logger = new Logger(AssistantGateway.name);
 
-  constructor(private readonly sessionService: SessionService) {}
+  constructor(
+    private readonly sessionService: SessionService,
+    private readonly toolRegistry: ToolRegistryService,
+    private readonly toolExecutor: ToolExecutorService,
+  ) {}
 
   handleConnection(client: Socket): void {
     this.logger.log(`Client connected: ${client.id}`);
@@ -138,6 +149,130 @@ export class AssistantGateway
       client.emit('error', {
         message: 'Session not found',
         code: 'SESSION_NOT_FOUND',
+      });
+    }
+  }
+
+  @SubscribeMessage('list_tools')
+  handleListTools(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data?: { category?: string; includeDeprecated?: boolean },
+  ): void {
+    try {
+      let tools;
+
+      if (data?.category) {
+        const category = data.category as ToolCategory;
+        if (Object.values(ToolCategory).includes(category)) {
+          tools = this.toolRegistry
+            .getToolsByCategory(category)
+            .map((t) => t.definition);
+        } else {
+          client.emit('error', {
+            message: `Invalid category: ${data.category}`,
+            code: 'INVALID_CATEGORY',
+          });
+          return;
+        }
+      } else {
+        tools = this.toolRegistry.getToolDefinitionDtos(
+          data?.includeDeprecated ?? false,
+        );
+      }
+
+      const response = new ToolListResponseDto(tools);
+      client.emit('tools_list', response);
+    } catch (error) {
+      this.logger.error(`Error listing tools: ${error}`);
+      client.emit('error', {
+        message: 'Failed to list tools',
+        code: 'TOOL_LIST_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('call_tool')
+  async handleToolCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: ToolCallRequestDto,
+  ): Promise<void> {
+    try {
+      // Validate request
+      if (!data?.toolName || typeof data.toolName !== 'string') {
+        client.emit('error', {
+          message:
+            'Invalid tool call format. Expected { toolName: string, parameters: object }',
+          code: 'INVALID_TOOL_CALL',
+        });
+        return;
+      }
+
+      // Check if session exists
+      if (!this.sessionService.hasSession(client.id)) {
+        client.emit('error', {
+          message: 'Session not found or expired',
+          code: 'SESSION_NOT_FOUND',
+        });
+        return;
+      }
+
+      // Create execution context
+      const context = {
+        sessionId: client.id,
+        clientId: client.id,
+        timestamp: Date.now(),
+      };
+
+      // Execute the tool
+      const response = await this.toolExecutor.executeAsDto(
+        {
+          toolName: data.toolName,
+          parameters: data.parameters ?? {},
+          callId: data.callId,
+        },
+        context,
+      );
+
+      client.emit('tool_result', response);
+    } catch (error) {
+      this.logger.error(`Error executing tool: ${error}`);
+      client.emit('error', {
+        message: 'Failed to execute tool',
+        code: 'TOOL_EXECUTION_ERROR',
+      });
+    }
+  }
+
+  @SubscribeMessage('get_tool_info')
+  handleGetToolInfo(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { toolName: string },
+  ): void {
+    try {
+      if (!data?.toolName || typeof data.toolName !== 'string') {
+        client.emit('error', {
+          message: 'Invalid request. Expected { toolName: string }',
+          code: 'INVALID_REQUEST',
+        });
+        return;
+      }
+
+      const definition = this.toolRegistry.getToolDefinition(data.toolName);
+
+      if (!definition) {
+        client.emit('error', {
+          message: `Tool "${data.toolName}" not found`,
+          code: 'TOOL_NOT_FOUND',
+        });
+        return;
+      }
+
+      client.emit('tool_info', definition);
+    } catch (error) {
+      this.logger.error(`Error getting tool info: ${error}`);
+      client.emit('error', {
+        message: 'Failed to get tool info',
+        code: 'TOOL_INFO_ERROR',
       });
     }
   }

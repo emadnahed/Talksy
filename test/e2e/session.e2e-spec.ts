@@ -306,14 +306,11 @@ describe('Session E2E', () => {
           },
         );
 
-        client2.on(
-          'conversation_history',
-          (data: { messages: unknown[] }) => {
-            client2History = data.messages;
-            client2HistoryReceived = true;
-            checkComplete();
-          },
-        );
+        client2.on('conversation_history', (data: { messages: unknown[] }) => {
+          client2History = data.messages;
+          client2HistoryReceived = true;
+          checkComplete();
+        });
 
         clientSocket.emit('user_message', { text: 'Client 1 message 1' });
         clientSocket.emit('user_message', { text: 'Client 1 message 2' });
