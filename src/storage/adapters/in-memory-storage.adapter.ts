@@ -9,9 +9,7 @@ interface StoredSession {
 }
 
 @Injectable()
-export class InMemoryStorageAdapter
-  implements SessionStorage, OnModuleDestroy
-{
+export class InMemoryStorageAdapter implements SessionStorage, OnModuleDestroy {
   private readonly logger = new Logger(InMemoryStorageAdapter.name);
   private readonly store: Map<string, StoredSession> = new Map();
 

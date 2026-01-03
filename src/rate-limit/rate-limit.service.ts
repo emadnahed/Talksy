@@ -21,7 +21,10 @@ export class RateLimitService implements OnModuleDestroy {
     this.config = {
       enabled: this.configService.get<boolean>('RATE_LIMIT_ENABLED', true),
       windowMs: this.configService.get<number>('RATE_LIMIT_WINDOW_MS', 60000),
-      maxRequests: this.configService.get<number>('RATE_LIMIT_MAX_REQUESTS', 10),
+      maxRequests: this.configService.get<number>(
+        'RATE_LIMIT_MAX_REQUESTS',
+        10,
+      ),
     };
 
     // Periodic cleanup of old entries
@@ -181,7 +184,9 @@ export class RateLimitService implements OnModuleDestroy {
     }
 
     if (cleanedCount > 0) {
-      this.logger.debug(`Cleaned up ${cleanedCount} inactive rate limit entries`);
+      this.logger.debug(
+        `Cleaned up ${cleanedCount} inactive rate limit entries`,
+      );
     }
   }
 

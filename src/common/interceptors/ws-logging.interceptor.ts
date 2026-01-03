@@ -27,8 +27,9 @@ export class WsLoggingInterceptor implements NestInterceptor {
 
   constructor(private readonly configService: ConfigService) {
     this.enabled = this.configService.get<boolean>('LOG_WS_EVENTS', true);
-    this.format =
-      (this.configService.get<string>('LOG_FORMAT', 'json') as 'json' | 'text');
+    this.format = this.configService.get<string>('LOG_FORMAT', 'json') as
+      | 'json'
+      | 'text';
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {

@@ -42,11 +42,9 @@ export class AssistantGateway
   private readonly logger = new Logger(AssistantGateway.name);
 
   constructor(
-    
     private readonly sessionService: SessionService,
     private readonly toolRegistry: ToolRegistryService,
     private readonly toolExecutor: ToolExecutorService,
-  ,
     private readonly aiService: AIService,
   ) {}
 

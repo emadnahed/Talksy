@@ -62,15 +62,16 @@ describe('ApiKeyGuard', () => {
     });
 
     it('should allow connection with valid API key in query', () => {
-      const context = createMockExecutionContext(
-        {},
-        { apiKey: 'valid-key-2' },
-      );
+      const context = createMockExecutionContext({}, { apiKey: 'valid-key-2' });
       expect(guard.canActivate(context)).toBe(true);
     });
 
     it('should allow connection with valid API key in auth token', () => {
-      const context = createMockExecutionContext({}, {}, { token: 'valid-key-3' });
+      const context = createMockExecutionContext(
+        {},
+        {},
+        { token: 'valid-key-3' },
+      );
       expect(guard.canActivate(context)).toBe(true);
     });
 

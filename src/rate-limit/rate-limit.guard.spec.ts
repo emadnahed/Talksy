@@ -10,7 +10,9 @@ describe('RateLimitGuard', () => {
   let mockRateLimitService: jest.Mocked<RateLimitService>;
   let mockEmit: jest.Mock;
 
-  const createMockExecutionContext = (clientId = 'test-client'): ExecutionContext => {
+  const createMockExecutionContext = (
+    clientId = 'test-client',
+  ): ExecutionContext => {
     mockEmit = jest.fn();
     const mockClient = {
       id: clientId,

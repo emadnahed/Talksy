@@ -6,6 +6,10 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(uuid)/)"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/setup.ts"],
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/../src/$1",
     "^@test/(.*)$": "<rootDir>/$1"

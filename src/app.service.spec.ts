@@ -102,7 +102,9 @@ describe('AppService', () => {
 
       it('should report healthy status for normal memory usage', async () => {
         const originalMemoryUsage = process.memoryUsage;
-        (process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }).memoryUsage = () => ({
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
           heapUsed: 50000000, // 50MB
           heapTotal: 100000000, // 100MB (50% usage)
           rss: 150000000,
@@ -118,7 +120,9 @@ describe('AppService', () => {
 
       it('should report degraded status for high memory usage', async () => {
         const originalMemoryUsage = process.memoryUsage;
-        (process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }).memoryUsage = () => ({
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
           heapUsed: 85000000, // 85MB
           heapTotal: 100000000, // 100MB (85% usage)
           rss: 150000000,
@@ -134,7 +138,9 @@ describe('AppService', () => {
 
       it('should report unhealthy status for critical memory usage', async () => {
         const originalMemoryUsage = process.memoryUsage;
-        (process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }).memoryUsage = () => ({
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
           heapUsed: 96000000, // 96MB
           heapTotal: 100000000, // 100MB (96% usage)
           rss: 150000000,
@@ -196,7 +202,9 @@ describe('AppService', () => {
 
       it('should report unhealthy when Redis health check throws', async () => {
         mockStorageService.isUsingRedis.mockReturnValue(true);
-        mockStorageService.isHealthy.mockRejectedValue(new Error('Connection error'));
+        mockStorageService.isHealthy.mockRejectedValue(
+          new Error('Connection error'),
+        );
 
         const result = await service.getDetailedHealth();
 
@@ -217,7 +225,9 @@ describe('AppService', () => {
     describe('overall status determination', () => {
       it('should return healthy when all checks are healthy', async () => {
         const originalMemoryUsage = process.memoryUsage;
-        (process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }).memoryUsage = () => ({
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
           heapUsed: 50000000, // 50MB
           heapTotal: 100000000, // 100MB (50% usage - healthy)
           rss: 150000000,
