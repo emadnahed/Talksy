@@ -232,10 +232,14 @@ describe('Session E2E', () => {
       let client1Ready = false;
       let client2Ready = false;
 
-      const checkComplete = () => {
+      const checkComplete = (): void => {
         if (client1Ready && client2Ready) {
-          expect(client1Messages).toEqual(['Echo: Hello from client 1']);
-          expect(client2Messages).toEqual(['Echo: Hello from client 2']);
+          // Each client should receive exactly one AI-generated response
+          expect(client1Messages.length).toBe(1);
+          expect(client2Messages.length).toBe(1);
+          // Responses should not be empty
+          expect(client1Messages[0].length).toBeGreaterThan(0);
+          expect(client2Messages[0].length).toBeGreaterThan(0);
           client2.disconnect();
           done();
         }
@@ -270,7 +274,7 @@ describe('Session E2E', () => {
       let client1History: unknown[] = [];
       let client2History: unknown[] = [];
 
-      const checkComplete = () => {
+      const checkComplete = (): void => {
         if (client1HistoryReceived && client2HistoryReceived) {
           expect(client1History.length).toBe(4);
           expect(client2History.length).toBe(2);
