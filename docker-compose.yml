@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Redis service for session storage
+  redis:
+    image: redis:7-alpine
+    container_name: talksy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - talksy-network
+
+  # Talksy application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: talksy-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+      # Redis configuration
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+
+      # Session configuration
+      - SESSION_TTL_MS=3600000
+      - SESSION_DISCONNECT_GRACE_MS=300000
+      - SESSION_MAX_HISTORY=100
+
+      # Rate limiting
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_MAX_REQUESTS=10
+      - RATE_LIMIT_WINDOW_MS=60000
+
+      # API Security (change this!)
+      - AUTH_ENABLED=false
+      - AUTH_BYPASS_IN_DEV=true
+
+      # AI Provider (OpenAI)
+      # Uncomment and set your OpenAI API key to enable AI features
+      # - OPENAI_API_KEY=your-openai-api-key-here
+      # - AI_MODEL=gpt-4-turbo-preview
+      # - AI_TEMPERATURE=0.7
+      # - AI_MAX_TOKENS=2000
+
+      # Logging
+      - LOG_LEVEL=log
+
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - talksy-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  talksy-network:
+    driver: bridge

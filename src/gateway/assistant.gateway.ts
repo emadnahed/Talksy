@@ -7,13 +7,16 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { UserMessageDto, AssistantResponseDto } from './dto/message.dto';
 import { SessionService } from '../session/session.service';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
 import { AIService } from '../ai/ai.service';
+import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
+import { WsLoggingInterceptor } from '../common/interceptors/ws-logging.interceptor';
 
 @WebSocketGateway({
   cors: {
@@ -21,6 +24,8 @@ import { AIService } from '../ai/ai.service';
     credentials: true,
   },
 })
+@UseGuards(ApiKeyGuard)
+@UseInterceptors(WsLoggingInterceptor)
 export class AssistantGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -79,6 +84,7 @@ export class AssistantGateway
     }
   }
 
+  @UseGuards(RateLimitGuard)
   @SubscribeMessage('user_message')
   async handleUserMessage(
     @ConnectedSocket() client: Socket,

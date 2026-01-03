@@ -221,6 +221,16 @@ export class SessionService implements OnModuleDestroy {
     return count;
   }
 
+  getDisconnectedSessionCount(): number {
+    let count = 0;
+    for (const session of this.store.sessions.values()) {
+      if (session.status === 'disconnected') {
+        count++;
+      }
+    }
+    return count;
+  }
+
   clearAllSessions(): void {
     this.clearAllTimers();
     this.store.sessions.clear();
