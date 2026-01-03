@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { configValidationSchema } from './config/config.schema';
 import { GatewayModule } from './gateway/gateway.module';
 import { SessionModule } from './session/session.module';
+import { AIModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { SessionModule } from './session/session.module';
       validationSchema: configValidationSchema,
     }),
     SessionModule,
+    AIModule,
     GatewayModule,
   ],
   controllers: [AppController],
