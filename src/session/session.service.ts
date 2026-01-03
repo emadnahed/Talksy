@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  Logger,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Session, SessionStore } from './interfaces/session.interface';
 import { SessionConfig } from './interfaces/session-config.interface';
@@ -258,9 +253,12 @@ export class SessionService implements OnModuleDestroy {
 
     const timeToExpire = session.expiresAt.getTime() - Date.now();
 
-    const timer = setTimeout(() => {
-      this.handleSessionExpiration(clientId);
-    }, Math.max(0, timeToExpire));
+    const timer = setTimeout(
+      () => {
+        this.handleSessionExpiration(clientId);
+      },
+      Math.max(0, timeToExpire),
+    );
 
     this.store.expirationTimers.set(clientId, timer);
   }

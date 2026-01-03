@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AssistantGateway } from './assistant.gateway';
 import { SessionService } from '../session/session.service';
+import { AIService } from '../ai/ai.service';
 import { Socket } from 'socket.io';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
@@ -13,6 +14,7 @@ import { RateLimitService } from '../rate-limit/rate-limit.service';
 describe('AssistantGateway', () => {
   let gateway: AssistantGateway;
   let sessionService: jest.Mocked<SessionService>;
+  let aiService: jest.Mocked<AIService>;
   let mockSocket: Partial<Socket>;
 
   const mockSession = {
@@ -71,10 +73,24 @@ describe('AssistantGateway', () => {
       touchSession: jest.fn().mockReturnValue(true),
     };
 
+    const mockAIService = {
+      generateCompletion: jest.fn().mockResolvedValue({
+        content: 'AI Response',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      }),
+      generateStream: jest.fn(),
+      currentProvider: 'mock',
+      isUsingFallback: false,
+      getAvailableProviders: jest.fn().mockReturnValue(['mock']),
+      switchProvider: jest.fn().mockReturnValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssistantGateway,
         { provide: SessionService, useValue: mockSessionService },
+        { provide: AIService, useValue: mockAIService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: RateLimitService, useValue: mockRateLimitService },
         ApiKeyGuard,
@@ -85,6 +101,7 @@ describe('AssistantGateway', () => {
 
     gateway = module.get<AssistantGateway>(AssistantGateway);
     sessionService = module.get(SessionService);
+    aiService = module.get(AIService);
 
     mockSocket = {
       id: 'test-socket-id',
@@ -103,7 +120,9 @@ describe('AssistantGateway', () => {
       expect(sessionService.hasDisconnectedSession).toHaveBeenCalledWith(
         'test-socket-id',
       );
-      expect(sessionService.createSession).toHaveBeenCalledWith('test-socket-id');
+      expect(sessionService.createSession).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
       expect(mockSocket.emit).toHaveBeenCalledWith('connected', {
         clientId: 'test-socket-id',
         sessionId: 'test-socket-id',
@@ -156,7 +175,9 @@ describe('AssistantGateway', () => {
       expect(sessionService.reconnectSession).toHaveBeenCalledWith(
         'test-socket-id',
       );
-      expect(sessionService.createSession).toHaveBeenCalledWith('test-socket-id');
+      expect(sessionService.createSession).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
     });
   });
 
@@ -179,10 +200,10 @@ describe('AssistantGateway', () => {
   });
 
   describe('handleUserMessage', () => {
-    it('should add messages to session and emit response', () => {
+    it('should add messages to session and emit AI response', async () => {
       const messageData = { text: 'Hello, world!' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(sessionService.hasSession).toHaveBeenCalledWith('test-socket-id');
       expect(sessionService.addMessage).toHaveBeenCalledWith(
@@ -190,25 +211,26 @@ describe('AssistantGateway', () => {
         MessageRole.USER,
         'Hello, world!',
       );
+      expect(aiService.generateCompletion).toHaveBeenCalled();
       expect(sessionService.addMessage).toHaveBeenCalledWith(
         'test-socket-id',
         MessageRole.ASSISTANT,
-        'Echo: Hello, world!',
+        'AI Response',
       );
       expect(mockSocket.emit).toHaveBeenCalledWith(
         'assistant_response',
         expect.objectContaining({
-          text: 'Echo: Hello, world!',
+          text: 'AI Response',
           timestamp: expect.any(Number),
         }),
       );
     });
 
-    it('should emit error when session not found', () => {
+    it('should emit error when session not found', async () => {
       sessionService.hasSession.mockReturnValue(false);
       const messageData = { text: 'Hello' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'Session not found or expired',
@@ -216,10 +238,10 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should emit error for empty text', () => {
+    it('should emit error for empty text', async () => {
       const messageData = { text: '' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'Invalid message format. Expected { text: string }',
@@ -227,10 +249,10 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should emit error for whitespace-only text', () => {
+    it('should emit error for whitespace-only text', async () => {
       const messageData = { text: '   ' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'Invalid message format. Expected { text: string }',
@@ -238,10 +260,10 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should emit error for missing text property', () => {
+    it('should emit error for missing text property', async () => {
       const messageData = {} as { text: string };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'Invalid message format. Expected { text: string }',
@@ -249,8 +271,8 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should emit error for null data', () => {
-      gateway.handleUserMessage(
+    it('should emit error for null data', async () => {
+      await gateway.handleUserMessage(
         mockSocket as Socket,
         null as unknown as { text: string },
       );
@@ -261,10 +283,10 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should emit error for non-string text', () => {
+    it('should emit error for non-string text', async () => {
       const messageData = { text: 123 } as unknown as { text: string };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'Invalid message format. Expected { text: string }',
@@ -272,11 +294,11 @@ describe('AssistantGateway', () => {
       });
     });
 
-    it('should include timestamp in response', () => {
+    it('should include timestamp in response', async () => {
       const beforeTime = Date.now();
       const messageData = { text: 'Test message' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       const afterTime = Date.now();
       const emitCall = (mockSocket.emit as jest.Mock).mock.calls.find(
@@ -288,18 +310,168 @@ describe('AssistantGateway', () => {
       expect(emitCall[1].timestamp).toBeLessThanOrEqual(afterTime);
     });
 
-    it('should emit processing error on exception', () => {
+    it('should emit processing error on exception', async () => {
       sessionService.hasSession.mockImplementation(() => {
         throw new Error('Unexpected error');
       });
       const messageData = { text: 'Test' };
 
-      gateway.handleUserMessage(mockSocket as Socket, messageData);
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', {
         message: 'An error occurred while processing your message',
         code: 'PROCESSING_ERROR',
       });
+    });
+
+    it('should emit processing error when AI fails', async () => {
+      aiService.generateCompletion.mockRejectedValue(new Error('AI Error'));
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'An error occurred while processing your message',
+        code: 'PROCESSING_ERROR',
+      });
+    });
+
+    it('should pass conversation history to AI service', async () => {
+      const mockHistory = [
+        { role: MessageRole.USER, content: 'Previous', timestamp: Date.now() },
+      ];
+      sessionService.getConversationHistory.mockReturnValue(mockHistory);
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessage(mockSocket as Socket, messageData);
+
+      expect(aiService.generateCompletion).toHaveBeenCalledWith(mockHistory);
+    });
+  });
+
+  describe('handleUserMessageStream', () => {
+    beforeEach(() => {
+      async function* mockStreamGenerator(): AsyncGenerator<{
+        content: string;
+        done: boolean;
+      }> {
+        yield { content: 'Hello', done: false };
+        yield { content: ' there!', done: false };
+        yield { content: '', done: true };
+      }
+      aiService.generateStream.mockReturnValue(mockStreamGenerator());
+    });
+
+    it('should emit stream_start event', async () => {
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'stream_start',
+        expect.objectContaining({ timestamp: expect.any(Number) }),
+      );
+    });
+
+    it('should emit stream chunks', async () => {
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('stream_chunk', {
+        content: 'Hello',
+        done: false,
+      });
+      expect(mockSocket.emit).toHaveBeenCalledWith('stream_chunk', {
+        content: ' there!',
+        done: false,
+      });
+    });
+
+    it('should emit stream_end with full response', async () => {
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'stream_end',
+        expect.objectContaining({
+          timestamp: expect.any(Number),
+          fullResponse: 'Hello there!',
+        }),
+      );
+    });
+
+    it('should add complete response to history', async () => {
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(sessionService.addMessage).toHaveBeenCalledWith(
+        'test-socket-id',
+        MessageRole.ASSISTANT,
+        'Hello there!',
+      );
+    });
+
+    it('should emit error when session not found', async () => {
+      sessionService.hasSession.mockReturnValue(false);
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Session not found or expired',
+        code: 'SESSION_NOT_FOUND',
+      });
+    });
+
+    it('should emit error for invalid message', async () => {
+      const messageData = { text: '' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'Invalid message format. Expected { text: string }',
+        code: 'INVALID_MESSAGE',
+      });
+    });
+
+    it('should emit processing error on stream failure', async () => {
+      async function* errorGenerator(): AsyncGenerator<{
+        content: string;
+        done: boolean;
+      }> {
+        throw new Error('Stream failed');
+      }
+      aiService.generateStream.mockReturnValue(errorGenerator());
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'An error occurred while processing your message',
+        code: 'PROCESSING_ERROR',
+      });
+    });
+
+    it('should not add empty response to history', async () => {
+      async function* emptyGenerator(): AsyncGenerator<{
+        content: string;
+        done: boolean;
+      }> {
+        yield { content: '', done: true };
+      }
+      aiService.generateStream.mockReturnValue(emptyGenerator());
+      const messageData = { text: 'Hello' };
+
+      await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
+
+      // Should only have one call for the user message, not the assistant response
+      const assistantCalls = sessionService.addMessage.mock.calls.filter(
+        (call) => call[1] === MessageRole.ASSISTANT,
+      );
+      expect(assistantCalls).toHaveLength(0);
     });
   });
 
@@ -336,8 +508,13 @@ describe('AssistantGateway', () => {
     it('should emit session info', () => {
       gateway.handleGetSessionInfo(mockSocket as Socket);
 
-      expect(sessionService.getSessionInfo).toHaveBeenCalledWith('test-socket-id');
-      expect(mockSocket.emit).toHaveBeenCalledWith('session_info', mockSessionInfo);
+      expect(sessionService.getSessionInfo).toHaveBeenCalledWith(
+        'test-socket-id',
+      );
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'session_info',
+        mockSessionInfo,
+      );
     });
 
     it('should emit error when session not found', () => {

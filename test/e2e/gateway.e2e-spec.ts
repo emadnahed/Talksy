@@ -86,14 +86,15 @@ describe('AssistantGateway (e2e)', () => {
 
   describe('user_message', () => {
     it('should receive assistant_response after sending user_message', (done) => {
-      const testMessage = { text: 'Hello, AI!' };
+      const testMessage = { text: 'Hello' };
 
       clientSocket.on(
         'assistant_response',
         (response: { text: string; timestamp: number }) => {
           expect(response).toHaveProperty('text');
           expect(response).toHaveProperty('timestamp');
-          expect(response.text).toBe('Echo: Hello, AI!');
+          // AI provider returns a greeting response
+          expect(response.text.length).toBeGreaterThan(0);
           expect(typeof response.timestamp).toBe('number');
           done();
         },
@@ -129,12 +130,12 @@ describe('AssistantGateway (e2e)', () => {
     });
 
     it('should handle multiple messages in sequence', (done) => {
-      const messages = ['First', 'Second', 'Third'];
+      const messages = ['Hello', 'How are you', 'Goodbye'];
       let receivedCount = 0;
 
       clientSocket.on('assistant_response', (response: { text: string }) => {
         receivedCount++;
-        expect(response.text).toBe(`Echo: ${messages[receivedCount - 1]}`);
+        expect(response.text.length).toBeGreaterThan(0);
 
         if (receivedCount === messages.length) {
           done();
@@ -144,6 +145,70 @@ describe('AssistantGateway (e2e)', () => {
       messages.forEach((text) => {
         clientSocket.emit('user_message', { text });
       });
+    });
+  });
+
+  describe('user_message_stream', () => {
+    it('should receive stream_start event', (done) => {
+      const testMessage = { text: 'Hello' };
+
+      clientSocket.on('stream_start', (data: { timestamp: number }) => {
+        expect(data).toHaveProperty('timestamp');
+        expect(typeof data.timestamp).toBe('number');
+        done();
+      });
+
+      clientSocket.emit('user_message_stream', testMessage);
+    });
+
+    it('should receive stream chunks', (done) => {
+      const testMessage = { text: 'Hello' };
+      const chunks: { content: string; done: boolean }[] = [];
+
+      clientSocket.on(
+        'stream_chunk',
+        (chunk: { content: string; done: boolean }) => {
+          chunks.push(chunk);
+        },
+      );
+
+      clientSocket.on(
+        'stream_end',
+        (data: { fullResponse: string; timestamp: number }) => {
+          expect(chunks.length).toBeGreaterThan(0);
+          expect(data.fullResponse.length).toBeGreaterThan(0);
+          done();
+        },
+      );
+
+      clientSocket.emit('user_message_stream', testMessage);
+    });
+
+    it('should receive stream_end event with full response', (done) => {
+      const testMessage = { text: 'Hello' };
+
+      clientSocket.on(
+        'stream_end',
+        (data: { fullResponse: string; timestamp: number }) => {
+          expect(data).toHaveProperty('fullResponse');
+          expect(data).toHaveProperty('timestamp');
+          expect(data.fullResponse.length).toBeGreaterThan(0);
+          done();
+        },
+      );
+
+      clientSocket.emit('user_message_stream', testMessage);
+    });
+
+    it('should receive error for empty stream message', (done) => {
+      const emptyMessage = { text: '' };
+
+      clientSocket.on('error', (error: { message: string; code: string }) => {
+        expect(error.code).toBe('INVALID_MESSAGE');
+        done();
+      });
+
+      clientSocket.emit('user_message_stream', emptyMessage);
     });
   });
 

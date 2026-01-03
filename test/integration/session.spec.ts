@@ -99,7 +99,11 @@ describe('SessionModule Integration', () => {
 
       // Create session and add message
       sessionService.createSession(clientId);
-      sessionService.addMessage(clientId, MessageRole.USER, 'Before disconnect');
+      sessionService.addMessage(
+        clientId,
+        MessageRole.USER,
+        'Before disconnect',
+      );
 
       // Disconnect
       sessionService.markDisconnected(clientId);
@@ -125,8 +129,16 @@ describe('SessionModule Integration', () => {
       sessionService.createSession(client2);
 
       // Add different messages to each
-      sessionService.addMessage(client1, MessageRole.USER, 'Message for client 1');
-      sessionService.addMessage(client2, MessageRole.USER, 'Message for client 2');
+      sessionService.addMessage(
+        client1,
+        MessageRole.USER,
+        'Message for client 1',
+      );
+      sessionService.addMessage(
+        client2,
+        MessageRole.USER,
+        'Message for client 2',
+      );
       sessionService.addMessage(
         client1,
         MessageRole.ASSISTANT,

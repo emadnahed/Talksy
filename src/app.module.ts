@@ -7,6 +7,7 @@ import { GatewayModule } from './gateway/gateway.module';
 import { SessionModule } from './session/session.module';
 import { StorageModule } from './storage/storage.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { AIModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
     StorageModule,
     RateLimitModule,
     SessionModule,
+    AIModule,
     GatewayModule,
   ],
   controllers: [AppController],
