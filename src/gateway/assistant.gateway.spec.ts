@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AssistantGateway } from './assistant.gateway';
 import { SessionService } from '../session/session.service';
+import { ToolRegistryService } from '../tools/services/tool-registry.service';
+import { ToolExecutorService } from '../tools/services/tool-executor.service';
 import { AIService } from '../ai/ai.service';
 import { Socket } from 'socket.io';
 import { MessageRole } from '../session/dto/session-message.dto';
@@ -73,6 +75,22 @@ describe('AssistantGateway', () => {
       touchSession: jest.fn().mockReturnValue(true),
     };
 
+    const mockToolRegistryService = {
+      getToolDefinitionDtos: jest.fn().mockReturnValue([]),
+      getToolsByCategory: jest.fn().mockReturnValue([]),
+      getToolDefinition: jest.fn().mockReturnValue(null),
+      hasTool: jest.fn().mockReturnValue(false),
+    };
+
+    const mockToolExecutorService = {
+      executeAsDto: jest.fn().mockResolvedValue({
+        callId: 'test-call-id',
+        toolName: 'test-tool',
+        result: { success: true, data: {}, executionTimeMs: 10 },
+        timestamp: Date.now(),
+      }),
+    };
+
     const mockAIService = {
       generateCompletion: jest.fn().mockResolvedValue({
         content: 'AI Response',
@@ -90,6 +108,8 @@ describe('AssistantGateway', () => {
       providers: [
         AssistantGateway,
         { provide: SessionService, useValue: mockSessionService },
+        { provide: ToolRegistryService, useValue: mockToolRegistryService },
+        { provide: ToolExecutorService, useValue: mockToolExecutorService },
         { provide: AIService, useValue: mockAIService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: RateLimitService, useValue: mockRateLimitService },
