@@ -94,7 +94,7 @@ export class OpenAIProvider implements AIProvider {
       // Placeholder until OpenAI SDK is installed
       throw new Error('OpenAI SDK not installed. Run: npm install openai');
     } catch (error) {
-      this.logger.error(`OpenAI completion failed: ${error}`);
+      this.logger.error('OpenAI completion failed', error);
       throw error;
     }
   }
@@ -138,7 +138,7 @@ export class OpenAIProvider implements AIProvider {
       // Placeholder until OpenAI SDK is installed
       throw new Error('OpenAI SDK not installed. Run: npm install openai');
     } catch (error) {
-      this.logger.error(`OpenAI stream failed: ${error}`);
+      this.logger.error('OpenAI stream failed', error);
       throw error;
     }
   }

@@ -125,7 +125,7 @@ export class AssistantGateway
 
       client.emit('assistant_response', response);
     } catch (error) {
-      this.logger.error(`Error handling user message: ${error}`);
+      this.logger.error('Error handling user message', error);
       client.emit('error', {
         message: 'An error occurred while processing your message',
         code: 'PROCESSING_ERROR',
@@ -190,7 +190,7 @@ export class AssistantGateway
         fullResponse,
       });
     } catch (error) {
-      this.logger.error(`Error handling streaming message: ${error}`);
+      this.logger.error('Error handling streaming message', error);
       client.emit('error', {
         message: 'An error occurred while processing your message',
         code: 'PROCESSING_ERROR',

@@ -8,7 +8,7 @@ export interface AICompletionOptions {
 
 export interface AICompletionResult {
   content: string;
-  finishReason: 'stop' | 'length' | 'error';
+  finishReason: 'stop' | 'length' | 'error' | 'tool_calls' | 'content_filter';
   usage?: {
     promptTokens: number;
     completionTokens: number;

@@ -106,7 +106,8 @@ export class AIService implements OnModuleInit {
       return result;
     } catch (error) {
       this.logger.error(
-        `Completion failed with ${this.activeProvider.name}: ${error}`,
+        `Completion failed with ${this.activeProvider.name}`,
+        error,
       );
       throw error;
     }
@@ -140,7 +141,8 @@ export class AIService implements OnModuleInit {
       yield* this.activeProvider.generateStream(messages, options);
     } catch (error) {
       this.logger.error(
-        `Stream failed with ${this.activeProvider.name}: ${error}`,
+        `Stream failed with ${this.activeProvider.name}`,
+        error,
       );
       throw error;
     }
