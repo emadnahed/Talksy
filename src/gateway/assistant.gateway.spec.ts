@@ -1,9 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { AssistantGateway } from './assistant.gateway';
 import { SessionService } from '../session/session.service';
 import { Socket } from 'socket.io';
 import { MessageRole } from '../session/dto/session-message.dto';
 import { SESSION_EVENTS } from '../session/constants/session.constants';
+import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
+import { WsLoggingInterceptor } from '../common/interceptors/ws-logging.interceptor';
+import { RateLimitService } from '../rate-limit/rate-limit.service';
 
 describe('AssistantGateway', () => {
   let gateway: AssistantGateway;
@@ -26,6 +31,25 @@ describe('AssistantGateway', () => {
     lastActivityAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 900000).toISOString(),
     messageCount: 0,
+  };
+
+  const mockConfigService = {
+    get: jest.fn((key: string, defaultValue?: unknown) => {
+      const config: Record<string, unknown> = {
+        AUTH_ENABLED: false,
+        AUTH_BYPASS_IN_DEV: true,
+        NODE_ENV: 'development',
+        API_KEYS: '',
+        RATE_LIMIT_ENABLED: false,
+        LOG_WS_EVENTS: false,
+      };
+      return config[key] ?? defaultValue;
+    }),
+  };
+
+  const mockRateLimitService = {
+    consume: jest.fn().mockReturnValue({ allowed: true, remaining: 9 }),
+    reset: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -51,6 +75,11 @@ describe('AssistantGateway', () => {
       providers: [
         AssistantGateway,
         { provide: SessionService, useValue: mockSessionService },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: RateLimitService, useValue: mockRateLimitService },
+        ApiKeyGuard,
+        RateLimitGuard,
+        WsLoggingInterceptor,
       ],
     }).compile();
 
