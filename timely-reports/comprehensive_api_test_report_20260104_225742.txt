@@ -1,0 +1,121 @@
+Talksy Comprehensive API Test Report - Sun Jan  4 22:57:42 IST 2026
+========================================
+Base URL: http://localhost:3000
+WebSocket URL: ws://localhost:3000
+
+[INFO] Starting comprehensive API tests for Talksy application...
+[INFO] Base URL: http://localhost:3000
+[INFO] WebSocket URL: ws://localhost:3000
+[INFO] Report will be saved to: timely-reports/comprehensive_api_test_report_20260104_225742.txt
+[INFO] Application is responding. Starting comprehensive tests...
+[PASS] Health Check Status: 200, Time: .160247000s
+Health Response: {"status":"ok","timestamp":"2026-01-04T17:27:43.088Z"}
+[PASS] Detailed Health Check Status: 200, Time: .158065000s
+Detailed Health Response: {"status":"degraded","timestamp":"2026-01-04T17:27:43.577Z","version":"0.0.1","environment":"development","uptime":32,"checks":{"memory":{"status":"degraded","heapUsed":26995696,"heapTotal":28753920,"rss":79138816,"percentage":0.94},"redis":{"status":"healthy","usingFallback":false,"message":"Redis not enabled, using in-memory storage"},"sessions":{"active":0,"total":0}}}
+[INFO] Health Details:
+[INFO]   Overall Status: degraded
+degraded
+healthy
+[INFO]   Redis Status: healthy
+[INFO]   Redis Latency: ms
+[INFO]   Uptime: 32s
+[INFO] Running 10 requests to calculate response time statistics...
+[PERFORMANCE] Response Time Statistics:
+[PERFORMANCE]   Requests: 10
+[PERFORMANCE]   Average: .001587s
+[PERFORMANCE]   Median: 0.001480s
+[PERFORMANCE]   Min: 0.001280s
+[PERFORMANCE]   Max: 0.002375s
+[PERFORMANCE]   Fast (<0.1s): 10
+[PERFORMANCE]   Medium (0.1-0.5s): 0
+[PERFORMANCE]   Slow (>0.5s): 0
+[PERFORMANCE] Performance Rating: ⭐⭐⭐⭐⭐ Excellent
+Response Time Statistics:
+  Requests: 10
+  Average: .001587s
+  Median: 0.001480s
+  Min: 0.001280s
+  Max: 0.002375s
+  Fast (<0.1s): 10
+  Medium (0.1-0.5s): 0
+  Slow (>0.5s): 0
+[PASS] Non-existent endpoint (should return 404) Status: 404, Time: 0.001307s
+[PASS] POST to GET-only endpoint (should return 404 or 405) Status: 404, Time: 0.001182s
+[INFO] Running 20 concurrent requests to health endpoint...
+[PERFORMANCE] Completed 20 concurrent requests in .582372000s
+[PERFORMANCE] Throughput: 34.34 requests/sec
+Load Test Results:
+  Concurrent Requests: 20
+  Total Time: .582372000s
+  Throughput: 34.34 requests/sec
+[INFO] Running stability test for 30s (checking every 2s)...
+[PASS] Stability check 1 Status: 200
+[PASS] Stability check 2 Status: 200
+[PASS] Stability check 3 Status: 200
+[PASS] Stability check 4 Status: 200
+[PASS] Stability check 5 Status: 200
+[PASS] Stability check 6 Status: 200
+[PASS] Stability check 7 Status: 200
+[PASS] Stability check 8 Status: 200
+[PASS] Stability check 9 Status: 200
+[PASS] Stability check 10 Status: 200
+[PASS] Stability check 11 Status: 200
+[PASS] Stability check 12 Status: 200
+[PASS] Stability check 13 Status: 200
+[PASS] Stability check 14 Status: 200
+[PASS] Stability check 15 Status: 200
+[PERFORMANCE] Stability Results:
+[PERFORMANCE]   Successful checks: 15/15
+[PERFORMANCE]   Success rate: 100.00%
+[PERFORMANCE] Stability Rating: ⭐⭐⭐⭐⭐ Perfect
+Stability Test:
+  Duration: 30s
+  Successful checks: 15/15
+  Success rate: 100.00%
+[INFO] WebSocket endpoint available at: ws://localhost:3000
+[INFO] Testing WebSocket availability via HTTP connection...
+[PASS] WebSocket port (3000) is accessible 
+[INFO] WebSocket service is running but upgrade not tested (requires WebSocket client)
+[INFO] WebSocket features: Real-time AI assistant, message streaming, tool execution
+WebSocket Test:
+  Endpoint: ws://localhost:3000
+  Features: Real-time AI assistant, message streaming, tool execution
+[INFO] WebSocket functionality requires a dedicated client for full testing
+[INFO] However, we can verify the service is running and accessible
+[PASS] WebSocket service is running on port 3000 
+[INFO] HTTP response: 
+[INFO] WebSocket upgrade not supported via HTTP request (expected for Socket.IO)
+[INFO] For complete WebSocket testing, a dedicated client would be needed to:
+[INFO]   - Connect to WebSocket endpoint
+[INFO]   - Send 'user_message' events
+[INFO]   - Receive 'assistant_response' events
+[INFO]   - Test session creation and management
+[INFO]   - Test tool execution functionality
+WebSocket Functionality Test:
+  Service Status: Running
+  Features: Real-time AI assistant, message streaming, tool execution
+  Testing Method: HTTP upgrade request simulation
+[INFO] Testing common API endpoint patterns...
+[PASS] API root endpoint Status: 404, Time: 0.001246s
+[PASS] API health endpoint Status: 404, Time: 0.001035s
+[PASS] Users endpoint Status: 404, Time: 0.001036s
+[PASS] Sessions endpoint Status: 404, Time: 0.001088s
+[PASS] Messages endpoint Status: 404, Time: 0.001139s
+[PASS] AI endpoint Status: 404, Time: 0.001163s
+[PASS] Tools endpoint Status: 404, Time: 0.001204s
+[INFO] Application-specific endpoints would require WebSocket client for full testing
+[INFO] The application is designed for real-time communication via WebSocket
+[INFO] Tests completed. Summary:
+[INFO] Total: 28, Passed: 28, Failed: 0
+[INFO] Additional Info: 30, Performance Metrics: 16
+[PERFORMANCE] Overall Rating: ⭐⭐⭐⭐⭐ Excellent
+[PERFORMANCE] All tests passed successfully!
+
+Final Test Summary:
+===================
+Total tests: 28
+Passed: 28
+Failed: 0
+Success Rate: 100.00%
+[INFO] Complete report saved to: timely-reports/comprehensive_api_test_report_20260104_225742.txt
+[INFO] Detailed logs saved to: timely-reports/comprehensive_api_test_log_20260104_225742.log

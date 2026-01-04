@@ -158,6 +158,77 @@ npm run test:e2e
 npm run test:cov
 ```
 
+### Run Comprehensive Test Suite
+```bash
+npm run test:comprehensive
+```
+
+### Run API Performance Tests
+```bash
+npm run test:api                    # Basic API tests
+npm run test:api:performance        # Performance tests
+npm run test:api:load               # Load tests
+npm run test:api:comprehensive      # Comprehensive API tests
+npm run test:api:comprehensive:v2   # Alternative comprehensive tests
+npm run test:api:performance:basic  # Basic performance tests
+npm run test:api:performance:enhanced # Enhanced performance tests
+```
+
+### Run All Tests Including API
+```bash
+npm run test:all
+```
+
+### Run Tests in Docker Environment
+```bash
+# Build and run tests in Docker
+npm run docker:test
+
+# Run all tests in Docker
+npm run docker:test:all
+
+# Run Docker integration tests
+npm run test:integration:docker
+
+# View Docker logs
+npm run docker:logs
+```
+
+### Run Specific Test Categories
+```bash
+# Run only unit tests
+npm run test:unit
+
+# Run only integration tests
+npm run test:integration
+
+# Run only end-to-end tests
+npm run test:e2e
+
+# Run tests with watch mode
+npm run test:watch
+```
+
+### Interactive Test Runner
+```bash
+# Use the interactive test runner
+npm run test:run help
+npm run test:run all
+npm run test:run api
+npm run test:run docker
+npm run test:run coverage
+```
+
+### Test Organization
+Tests are organized in the `test-scripts/` directory with the following structure:
+- `api/` - API-specific tests
+- `performance/` - Performance and benchmarking tests
+- `load/` - Load and stress tests
+- `integration/` - Integration and environment tests
+- `unit/` and `e2e/` - Handled by Jest framework
+
+For more details about the testing structure, see [test-scripts/README.md](./test-scripts/README.md).
+
 ---
 
 ## 📋 Development Phases
