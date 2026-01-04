@@ -1,0 +1,32 @@
+Talksy API Test Report - Sun Jan  4 17:24:27 IST 2026
+========================================
+
+[INFO] Base URL: http://localhost:3000
+[INFO] Report will be saved to: api_test_report_20260104_172426.txt
+[INFO] Application is responding. Starting tests...
+[PASS] Health Check - Status: 200, Time: 0.003925s
+[PASS] Detailed Health Check - Status: 200, Time: 0.005164s
+[INFO] Average response time over 5 requests: .003s
+[INFO] Fast responses (<0.5s): 5, Slow responses (>=0.5s): 0
+Average response time: .003s
+Fast responses (<0.5s): 5, Slow responses (>=0.5s): 0
+[PASS] Non-existent endpoint (should return 404) - Status: 404, Time: 0.004121s
+[INFO] Performance test completed for all endpoints
+Performance: /health: .169331000s
+Performance: /health/detailed: .168157000s
+[INFO] Running 10 concurrent requests to health endpoint
+[INFO] Completed 10 concurrent requests in .398650000s
+Load test: 10 concurrent requests completed in .398650000s
+[INFO] WebSocket testing requires a WebSocket client. Manual verification needed.
+WebSocket testing requires a WebSocket client. Manual verification needed.
+
+Test Summary:
+=============
+Total tests: 3
+Passed: 3
+Failed: 0
+[INFO] Tests completed. Summary:
+[INFO] Total: 3, Passed: 3, Failed: 0
+[INFO] Report saved to: api_test_report_20260104_172426.txt
+[INFO] Performance summary:
+[INFO] Performance: Excellent (avg response < 0.2s)

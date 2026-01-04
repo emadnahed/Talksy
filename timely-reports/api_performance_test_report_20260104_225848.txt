@@ -1,0 +1,75 @@
+Talksy API Performance Test Report - Sun Jan  4 22:58:48 IST 2026
+========================================
+Base URL: http://localhost:3000
+
+[INFO] Base URL: http://localhost:3000
+[INFO] Report will be saved to: timely-reports/api_performance_test_report_20260104_225848.txt
+[INFO] Application is responding. Starting performance tests...
+[INFO] Response Time Analysis
+[INFO] Running 10 requests to calculate response time statistics...
+[PERFORMANCE] Response Time Statistics:
+[PERFORMANCE]   Requests: 10
+[PERFORMANCE]   Average: .001224s
+[PERFORMANCE]   Median: 0.001136s
+[PERFORMANCE]   Min: 0.001059s
+[PERFORMANCE]   Max: 0.001844s
+[PERFORMANCE]   Fast (<0.1s): 10
+[PERFORMANCE]   Medium (0.1-0.5s): 0
+[PERFORMANCE]   Slow (>0.5s): 0
+[PERFORMANCE] Performance Rating: ⭐⭐⭐⭐⭐ Excellent
+Response Time Statistics:
+  Requests: 10
+  Average: .001224s
+  Median: 0.001136s
+  Min: 0.001059s
+  Max: 0.001844s
+  Fast (<0.1s): 10
+  Medium (0.1-0.5s): 0
+  Slow (>0.5s): 0
+[INFO] Load Test Results
+[INFO] Running 20 concurrent requests to health endpoint...
+[PERFORMANCE] Completed 20 concurrent requests in .556218000s
+[PERFORMANCE] Throughput: 35.95 requests/sec
+Load Test Results:
+  Concurrent Requests: 20
+  Total Time: .556218000s
+  Throughput: 35.95 requests/sec
+[INFO] Stability Test
+[INFO] Running stability test for 30s (checking every 2s)...
+[PASS] Stability check 1 Status: 200
+[PASS] Stability check 2 Status: 200
+[PASS] Stability check 3 Status: 200
+[PASS] Stability check 4 Status: 200
+[PASS] Stability check 5 Status: 200
+[PASS] Stability check 6 Status: 200
+[PASS] Stability check 7 Status: 200
+[PASS] Stability check 8 Status: 200
+[PASS] Stability check 9 Status: 200
+[PASS] Stability check 10 Status: 200
+[PASS] Stability check 11 Status: 200
+[PASS] Stability check 12 Status: 200
+[PASS] Stability check 13 Status: 200
+[PASS] Stability check 14 Status: 200
+[PASS] Stability check 15 Status: 200
+[PERFORMANCE] Stability Results:
+[PERFORMANCE]   Successful checks: 15/15
+[PERFORMANCE]   Success rate: 100.00%
+[PERFORMANCE] Stability Rating: ⭐⭐⭐⭐⭐ Perfect
+Stability Test:
+  Duration: 30s
+  Successful checks: 15/15
+  Success rate: 100.00%
+[INFO] Performance tests completed. Summary:
+[INFO] Total: 15, Passed: 15, Failed: 0
+[INFO] Additional Info: 9, Performance Metrics: 16
+[PERFORMANCE] Overall Rating: ⭐⭐⭐⭐⭐ Excellent
+[PERFORMANCE] All performance tests passed successfully!
+
+Final Performance Summary:
+=========================
+Total tests: 15
+Passed: 15
+Failed: 0
+Success Rate: 100.00%
+[INFO] Complete report saved to: timely-reports/api_performance_test_report_20260104_225848.txt
+[INFO] Detailed logs saved to: timely-reports/api_performance_test_log_20260104_225848.log
