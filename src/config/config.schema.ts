@@ -43,4 +43,5 @@ export const configValidationSchema = Joi.object({
     .default('log'),
   LOG_FORMAT: Joi.string().valid('json', 'text').default('json'),
   LOG_WS_EVENTS: Joi.boolean().default(true),
+  LOG_HTTP_REQUESTS: Joi.boolean().default(true),
 });
