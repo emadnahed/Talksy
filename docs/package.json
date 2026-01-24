@@ -1,0 +1,31 @@
+{
+  "name": "talksy-docs",
+  "version": "1.0.0",
+  "description": "Documentation for Talksy Real-Time AI Assistant",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nextra dev docs/customer",
+    "build": "nextra build docs/customer",
+    "start": "nextra start docs/customer",
+    "lint": "eslint docs/customer --ext .js,.jsx,.ts,.tsx"
+  },
+  "dependencies": {
+    "nextra": "^2.13.4",
+    "nextra-theme-docs": "^2.13.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0"
+  },
+  "keywords": [
+    "talksy",
+    "documentation",
+    "ai",
+    "assistant",
+    "websocket",
+    "nestjs"
+  ],
+  "author": "Talksy Team",
+  "license": "MIT"
+}

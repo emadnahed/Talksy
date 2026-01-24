@@ -1,0 +1,121 @@
+# Features
+
+Talksy provides a comprehensive set of features for building real-time AI assistant applications.
+
+## Real-time Communication
+
+Talksy uses WebSockets (Socket.IO) for low-latency, real-time communication between clients and the AI assistant. This enables:
+
+- Instant responses from the AI
+- Streaming responses for longer content
+- Real-time session management
+- Tool execution with immediate feedback
+
+## AI Integration
+
+Talksy features an abstraction layer that supports multiple AI providers:
+
+- **OpenAI**: Integration with GPT models
+- **Local LLMs**: Support for local language models
+- **Custom Providers**: Easy integration with other AI services
+
+The AI service handles:
+- Conversation context management
+- Response generation
+- Streaming responses
+- Error handling and retries
+
+## Session Management
+
+Each client connection gets a unique session that:
+
+- Maintains conversation history
+- Tracks message count and timestamps
+- Handles disconnection and reconnection
+- Expires after a configurable period (default: 15 minutes)
+- Supports graceful disconnection with a 5-minute grace period
+
+### Session Lifecycle
+
+1. **Creation**: A new session is created when a client connects
+2. **Active**: Session remains active during the conversation
+3. **Disconnected**: Session is marked as disconnected when client leaves
+4. **Grace Period**: Session remains available for reconnection (5 minutes)
+5. **Expiration**: Session is cleaned up after TTL (15 minutes)
+
+## Tool Execution
+
+Talksy includes a powerful tool execution system that allows the AI to:
+
+- Call external services and APIs
+- Execute custom functions
+- Retrieve real-time information
+- Perform complex operations
+
+### Tool Categories
+
+Tools are organized into categories:
+- **Information**: Tools that retrieve information (e.g., weather, news)
+- **Utility**: Tools that perform utility functions (e.g., calculator, converter)
+- **Integration**: Tools that integrate with external services (e.g., calendar, email)
+
+### Creating Custom Tools
+
+You can easily create custom tools by implementing the tool interface and registering them with the tool registry.
+
+## Streaming Responses
+
+Talksy supports streaming responses for:
+
+- Faster initial response times
+- Better user experience for longer content
+- Real-time content generation
+- Lower perceived latency
+
+## Rate Limiting
+
+Built-in rate limiting protects against abuse:
+
+- Configurable limits per IP address
+- Automatic blocking of excessive requests
+- Customizable thresholds
+- Detailed logging of rate limit events
+
+## Health Monitoring
+
+Comprehensive health monitoring includes:
+
+- Memory usage tracking
+- Redis connection health
+- Active session counts
+- Application uptime
+- Detailed health reports
+
+## Horizontal Scaling
+
+Talksy is designed for horizontal scaling:
+
+- Redis-based WebSocket adapter for multi-instance deployments
+- Shared session storage
+- Load balancing support
+- Distributed architecture
+
+## Security
+
+Security features include:
+
+- API key authentication
+- Input validation
+- Rate limiting
+- Secure WebSocket connections
+- Environment-based configuration
+
+## Extensibility
+
+Talksy is designed to be extensible:
+
+- Modular architecture
+- Plugin system for tools
+- Custom AI provider integration
+- Extensible session management
+- Custom event handling

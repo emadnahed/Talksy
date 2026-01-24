@@ -1,0 +1,273 @@
+# Reference
+
+This section provides technical reference information for Talksy.
+
+## Environment Variables
+
+### Server Configuration
+- `PORT`: Port number for the server (default: 3000)
+- `NODE_ENV`: Environment mode (development, production, test)
+- `CORS_ORIGIN`: Allowed origin for CORS (default: *)
+
+### API Keys
+- `API_KEY`: Default API key for authentication
+- `OPENAI_API_KEY`: OpenAI API key for AI services
+
+### Redis Configuration
+- `REDIS_HOST`: Redis server host (default: localhost)
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_PASSWORD`: Redis server password (optional)
+- `REDIS_DB`: Redis database number (default: 0)
+
+### Session Configuration
+- `SESSION_TTL_MS`: Session time-to-live in milliseconds (default: 900000 - 15 minutes)
+- `SESSION_DISCONNECT_GRACE_MS`: Grace period for reconnection in milliseconds (default: 300000 - 5 minutes)
+- `SESSION_MAX_HISTORY_LENGTH`: Maximum number of messages to store (default: 100)
+- `SESSION_CLEANUP_INTERVAL_MS`: Interval for cleaning up expired sessions (default: 60000 - 1 minute)
+
+### Rate Limiting
+- `RATE_LIMIT_WINDOW_MS`: Time window for rate limiting in milliseconds (default: 60000 - 1 minute)
+- `RATE_LIMIT_MAX_REQUESTS`: Maximum requests per window (default: 100)
+
+## API Response Codes
+
+### HTTP Status Codes
+- `200`: Success
+- `400`: Bad Request - Invalid request format
+- `401`: Unauthorized - Missing or invalid API key
+- `404`: Not Found - Endpoint does not exist
+- `429`: Too Many Requests - Rate limit exceeded
+- `500`: Internal Server Error
+
+### WebSocket Error Codes
+- `INVALID_MESSAGE`: The message format is invalid
+- `SESSION_NOT_FOUND`: The session does not exist or has expired
+- `PROCESSING_ERROR`: An error occurred while processing the message
+- `INVALID_CATEGORY`: The specified category is invalid
+- `TOOL_LIST_ERROR`: Failed to list tools
+- `INVALID_TOOL_CALL`: The tool call format is invalid
+- `TOOL_EXECUTION_ERROR`: Failed to execute the tool
+- `INVALID_REQUEST`: The request format is invalid
+- `TOOL_NOT_FOUND`: The specified tool does not exist
+- `TOOL_INFO_ERROR`: Failed to get tool information
+
+## Health Check Response Format
+
+### Basic Health Check (`/health`)
+```json
+{
+  "status": "ok",
+  "timestamp": "2023-10-05T14:48:00.000Z"
+}
+```
+
+### Detailed Health Check (`/health/detailed`)
+```json
+{
+  "status": "healthy",
+  "timestamp": "2023-10-05T14:48:00.000Z",
+  "version": "1.0.0",
+  "environment": "production",
+  "uptime": 3600,
+  "checks": {
+    "memory": {
+      "status": "healthy",
+      "heapUsed": 45678901,
+      "heapTotal": 98765432,
+      "rss": 12345678,
+      "percentage": 46.2
+    },
+    "redis": {
+      "status": "healthy",
+      "latencyMs": 2.5,
+      "usingFallback": false
+    },
+    "sessions": {
+      "active": 15,
+      "total": 42
+    }
+  }
+}
+```
+
+## WebSocket Events
+
+### Client → Server Events
+- `user_message`: Send a message to the AI assistant
+- `user_message_stream`: Send a message and receive streaming response
+- `get_history`: Retrieve conversation history
+- `get_session_info`: Get session information
+- `list_tools`: List available tools
+- `call_tool`: Execute a specific tool
+- `get_tool_info`: Get information about a specific tool
+
+### Server → Client Events
+- `connected`: Connection established
+- `session_created`: New session created
+- `session_restored`: Disconnected session restored
+- `assistant_response`: AI assistant response
+- `stream_start`: Streaming response started
+- `stream_chunk`: Chunk of streaming response
+- `stream_end`: Streaming response ended
+- `conversation_history`: Conversation history response
+- `session_info`: Session information
+- `tools_list`: List of available tools
+- `tool_result`: Tool execution result
+- `tool_info`: Tool definition information
+- `error`: Error occurred
+
+## Tool Definition Format
+
+```json
+{
+  "name": "string",
+  "description": "string",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "paramName": {
+        "type": "string|number|boolean|object|array",
+        "description": "string",
+        "enum": ["value1", "value2"] // optional
+      }
+    },
+    "required": ["paramName"] // optional
+  },
+  "category": "string",
+  "version": "string",
+  "deprecated": "boolean"
+}
+```
+
+## Session Information Format
+
+```json
+{
+  "id": "string",
+  "createdAt": "string", // ISO date string
+  "expiresAt": "string", // ISO date string
+  "messageCount": "number"
+}
+```
+
+## Tool Result Format
+
+```json
+{
+  "callId": "string",
+  "toolName": "string",
+  "result": {
+    "success": "boolean",
+    "data": "object", // optional
+    "error": {
+      "code": "string",
+      "message": "string",
+      "details": "object" // optional
+    },
+    "executionTimeMs": "number"
+  },
+  "timestamp": "number"
+}
+```
+
+## Docker Configuration
+
+### Dockerfile
+The application can be containerized using the provided Dockerfile:
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start:prod"]
+```
+
+### docker-compose.yml
+For development with Redis:
+
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+```
+
+## Package.json Scripts
+
+- `npm run start`: Start the application
+- `npm run start:dev`: Start in development mode with watch
+- `npm run start:debug`: Start in debug mode
+- `npm run start:prod`: Start in production mode
+- `npm run build`: Build the application
+- `npm run test`: Run all tests
+- `npm run test:unit`: Run unit tests
+- `npm run test:integration`: Run integration tests
+- `npm run test:e2e`: Run end-to-end tests
+- `npm run test:watch`: Run tests in watch mode
+- `npm run test:cov`: Run tests with coverage
+- `npm run lint`: Lint the code
+- `npm run format`: Format the code
+- `npm run docker:up`: Start services with Docker
+- `npm run docker:down`: Stop services with Docker
+
+## Performance Considerations
+
+### Memory Management
+- Monitor heap usage with health checks
+- Configure appropriate session TTL values
+- Implement proper cleanup of expired sessions
+- Consider using Redis for session storage in production
+
+### Rate Limiting
+- Configure appropriate rate limits based on expected usage
+- Monitor rate limit events for abuse detection
+- Adjust limits based on infrastructure capacity
+
+### WebSocket Connections
+- Monitor active connection count
+- Implement proper connection cleanup
+- Consider horizontal scaling with Redis adapter
+- Handle connection errors gracefully
+
+## Security Best Practices
+
+### API Keys
+- Use strong, unique API keys
+- Rotate API keys regularly
+- Implement proper key validation
+- Log authentication attempts
+
+### Input Validation
+- Validate all incoming messages
+- Sanitize user input
+- Implement rate limiting
+- Prevent injection attacks
+
+### Data Privacy
+- Encrypt sensitive data in transit
+- Implement proper data retention policies
+- Follow GDPR and other privacy regulations
+- Secure session data storage

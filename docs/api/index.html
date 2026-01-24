@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Talksy API Documentation</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script
+      id="api-reference"
+      data-url="./openapi.yaml"
+      data-configuration='{
+        "showSidebar": true,
+        "defaultHttpClient": {
+          "target": "openapi",
+          "version": "3.0"
+        }
+      }'
+    ></script>
+    <script src="https://cdn.scalar.com/api-reference.js"></script>
+  </head>
+  <body>
+    <script>
+      // Initialize Scalar API Reference
+      const apiReference = document.getElementById('api-reference');
+      apiReference.setAttribute('data-url', './openapi.yaml');
+    </script>
+  </body>
+</html>

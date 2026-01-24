@@ -1,0 +1,50 @@
+# Welcome to Talksy Documentation
+
+Welcome to the official documentation for Talksy, a production-grade, real-time AI assistant backend built with NestJS using WebSockets for low-latency communication.
+
+## What is Talksy?
+
+Talksy is a **real-time AI assistant backend** designed to be **extensible**, **scalable**, and **interview-ready**. It demonstrates how modern AI assistants are built in real systems.
+
+## Key Features
+
+- ✅ Real-time communication using WebSockets (Socket.IO)
+- ✅ Clean, modular NestJS architecture
+- ✅ AI abstraction layer (OpenAI / Local LLM ready)
+- ✅ Session-based conversation memory
+- ✅ Low-latency request/response flow
+- ✅ Designed for scaling (Redis, streaming, voice)
+
+## Quick Start
+
+To get started with Talksy, visit our [Getting Started](./getting-started.mdx) guide.
+
+## Architecture
+
+Talksy uses a modular architecture with the following components:
+
+```
+Client (Web / Mobile)
+        │
+   WebSocket (Socket.IO)
+        │
+┌──────────────────┐
+│ NestJS Gateway   │
+└───────┬──────────┘
+        │
+┌──────────────────┐
+│ AI Service       │──▶ OpenAI / LLaMA / Local LLM
+└───────┬──────────┘
+        │
+┌──────────────────┐
+│ Session Storage  │ (In-memory → Redis)
+└──────────────────┘
+```
+
+## Next Steps
+
+- [Getting Started](./getting-started.mdx) - Set up and run Talksy
+- [API Reference](./api.mdx) - Detailed API documentation
+- [Features](./features.mdx) - Explore Talksy's capabilities
+- [Tools](./tools.mdx) - Learn about tool execution
+- [Sessions](./sessions.mdx) - Understand session management

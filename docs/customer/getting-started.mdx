@@ -1,0 +1,124 @@
+# Getting Started
+
+This guide will help you set up and run Talksy, a real-time AI assistant backend built with NestJS.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- Node.js (version 18 or higher)
+- npm or yarn package manager
+- Docker (optional, for containerized deployment)
+
+## Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-organization/talksy.git
+cd talksy
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure Environment
+
+Create a `.env` file based on the example:
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file with your configuration:
+
+```env
+PORT=3000
+API_KEY=your_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+REDIS_HOST=localhost
+REDIS_PORT=6379
+CORS_ORIGIN=*
+```
+
+### 4. Start the Application
+
+#### Development Mode
+
+```bash
+npm run start:dev
+```
+
+#### Production Mode
+
+```bash
+npm run build
+npm run start:prod
+```
+
+#### Docker Mode
+
+```bash
+docker-compose up -d
+```
+
+## Connecting to the WebSocket
+
+Talksy uses WebSockets for real-time communication. Here's how to connect:
+
+### JavaScript Client Example
+
+```javascript
+import io from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  transports: ['websocket'],
+  auth: {
+    apiKey: 'your_api_key_here'
+  }
+});
+
+socket.on('connect', () => {
+  console.log('Connected to Talksy server');
+});
+
+socket.on('connected', (data) => {
+  console.log('Session created:', data);
+});
+
+socket.on('assistant_response', (response) => {
+  console.log('AI Response:', response.text);
+});
+
+// Send a message
+socket.emit('user_message', { text: 'Hello, how are you?' });
+```
+
+## API Key Authentication
+
+All WebSocket connections require API key authentication. Include your API key in the connection options:
+
+```javascript
+const socket = io('http://localhost:3000', {
+  auth: {
+    apiKey: 'your_api_key_here'
+  }
+});
+```
+
+## Health Checks
+
+You can check the health of your Talksy instance with these endpoints:
+
+- `GET /health` - Basic health check
+- `GET /health/detailed` - Detailed health check with memory, Redis, and session information
+
+## Next Steps
+
+- [API Reference](./api.mdx) - Explore the WebSocket events and API
+- [Features](./features.mdx) - Learn about Talksy's capabilities
+- [Tools](./tools.mdx) - Understand tool execution
+- [Sessions](./sessions.mdx) - Learn about session management
