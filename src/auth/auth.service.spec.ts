@@ -5,6 +5,7 @@ import { UnauthorizedException, ConflictException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '@/user/user.service';
 import { User } from '@/user/user.entity';
+import { CacheService } from '@/cache/cache.service';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -68,6 +69,20 @@ describe('AuthService', () => {
             findByEmail: jest.fn(),
             findById: jest.fn(),
             validatePassword: jest.fn(),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(true),
+            getTokenValidation: jest.fn().mockReturnValue(undefined),
+            setTokenValidation: jest.fn(),
+            invalidateToken: jest.fn(),
+            invalidateAllTokensForUser: jest.fn(),
+            getUser: jest.fn().mockReturnValue(undefined),
+            setUser: jest.fn(),
+            invalidateUser: jest.fn(),
+            clearAll: jest.fn(),
           },
         },
       ],

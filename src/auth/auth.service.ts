@@ -11,6 +11,7 @@ import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { UserService } from '@/user/user.service';
 import { User } from '@/user/user.entity';
+import { CacheService } from '@/cache/cache.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { IJwtPayload, IRefreshTokenPayload } from './interfaces/jwt-payload.interface';
@@ -44,6 +45,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
+    private readonly cacheService: CacheService,
   ) {
     this.keyPrefix = this.configService.get<string>('REDIS_KEY_PREFIX', 'talksy:');
     const accessExpiry = this.configService.get<string>('JWT_ACCESS_EXPIRY', '15m');
@@ -210,6 +212,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     try {
       const payload = this.jwtService.verify<IRefreshTokenPayload>(refreshToken);
       await this.revokeRefreshToken(payload.tokenId);
+
+      // Invalidate all cached tokens for this user (security best practice)
+      this.cacheService.invalidateAllTokensForUser(payload.sub);
+
       this.logger.debug(`User ${payload.sub} logged out`);
     } catch {
       // Token already invalid or expired, nothing to revoke
@@ -218,12 +224,32 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   async validateAccessToken(token: string): Promise<IAuthUser | null> {
+    // Check cache first
+    const cached = this.cacheService.getTokenValidation(token);
+    if (cached) {
+      return cached;
+    }
+
+    // Cache miss - verify JWT
     try {
       const payload = this.jwtService.verify<IJwtPayload>(token);
-      return {
+      const authUser: IAuthUser = {
         userId: payload.sub,
         email: payload.email,
       };
+
+      // Cache the result with TTL based on remaining token lifetime
+      if (payload.exp) {
+        const remainingMs = (payload.exp * 1000) - Date.now();
+        if (remainingMs > 0) {
+          this.cacheService.setTokenValidation(token, authUser, remainingMs);
+        }
+      } else {
+        // No exp claim, use default TTL
+        this.cacheService.setTokenValidation(token, authUser);
+      }
+
+      return authUser;
     } catch {
       return null;
     }

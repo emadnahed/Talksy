@@ -34,3 +34,30 @@ export const smokeThresholds = {
   ws_connecting: ['p(95)<1000'],
   ws_response_time: ['p(95)<3000'],
 };
+
+// Auth Cache thresholds
+export const authCacheThresholds = {
+  // Overall auth request performance
+  auth_request_duration: ['p(95)<200', 'p(99)<500'],
+
+  // Cache performance - warm requests should be very fast
+  auth_cold_request_duration: ['p(95)<300'],   // Cold (cache miss) within 300ms
+  auth_warm_request_duration: ['p(95)<50'],    // Warm (cache hit) within 50ms
+
+  // Token validation should be fast due to caching
+  token_validation_duration: ['p(95)<100'],
+
+  // User lookup should benefit from cache
+  user_lookup_duration: ['p(95)<100'],
+
+  // Cache hit rate should be high after warmup
+  auth_cache_hit_rate: ['rate>0.80'],  // 80%+ cache hit rate
+};
+
+// Combined auth thresholds for full auth tests
+export const authFullThresholds = {
+  ...authCacheThresholds,
+  // Registration is slower (bcrypt hashing)
+  http_req_duration: ['p(95)<1000'],
+  http_req_failed: ['rate<0.01'],
+};

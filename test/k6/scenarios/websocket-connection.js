@@ -9,6 +9,7 @@ import {
   wsConnectionCount,
   wsErrors,
 } from '../utils/metrics.js';
+import { getEnvConfig } from '../config/environments.js';
 
 // Use smoke stages for quick tests, connection stages for full tests
 const isSmoke = __ENV.SMOKE === 'true';
@@ -18,14 +19,42 @@ export const options = {
   thresholds: isSmoke ? smokeThresholds : connectionThresholds,
 };
 
-const BASE_URL = __ENV.BASE_URL || 'ws://localhost:3000';
+const config = getEnvConfig(__ENV.ENV);
+
+/**
+ * Parse Socket.IO Engine.IO packet
+ * Packet format: <packet_type>[data]
+ * - 0: open (server sends session info)
+ * - 2: ping (server sends, client responds with 3)
+ * - 3: pong
+ * - 4: message (contains Socket.IO packet)
+ *
+ * Socket.IO packet format (after 4): <packet_type>[data]
+ * - 0: connect
+ * - 2: event (followed by JSON array)
+ */
+function parseSocketIOMessage(data) {
+  if (!data || data.length === 0) return null;
+
+  const packetType = data.charAt(0);
+  const payload = data.substring(1);
+
+  return {
+    engineType: packetType,
+    payload,
+    // For message packets (4), extract Socket.IO packet type
+    socketType: packetType === '4' && payload.length > 0 ? payload.charAt(0) : null,
+    socketPayload: packetType === '4' && payload.length > 1 ? payload.substring(1) : null,
+  };
+}
 
 export default function () {
   const startTime = Date.now();
   let sessionReceived = false;
   let connectionSuccessful = false;
+  let namespaceConnected = false;
 
-  const res = ws.connect(BASE_URL, {}, function (socket) {
+  const res = ws.connect(config.baseUrl, {}, function (socket) {
     const connectTime = Date.now() - startTime;
     wsConnecting.add(connectTime);
     wsConnectionCount.add(1);
@@ -36,26 +65,43 @@ export default function () {
     });
 
     socket.on('message', function (data) {
-      try {
-        const message = JSON.parse(data);
+      const packet = parseSocketIOMessage(data);
+      if (!packet) return;
 
-        // Handle Socket.IO protocol messages
-        if (typeof message === 'number') {
-          // Socket.IO handshake
-          return;
-        }
+      // Handle Engine.IO packets
+      switch (packet.engineType) {
+        case '0': // Open - server sends session info
+          // Send Socket.IO connect to default namespace
+          socket.send('40');
+          break;
 
-        // Handle Socket.IO event format: ["event_name", data]
-        if (Array.isArray(message) && message.length >= 2) {
-          const [eventName, eventData] = message;
+        case '2': // Ping - respond with pong
+          socket.send('3');
+          break;
 
-          if (eventName === 'connected' || eventName === 'session_created') {
-            sessionReceived = true;
-            wsSessionReceived.add(Date.now() - startTime);
+        case '4': // Message - contains Socket.IO packet
+          // Handle Socket.IO packets
+          switch (packet.socketType) {
+            case '0': // Connected to namespace
+              namespaceConnected = true;
+              break;
+
+            case '2': // Event
+              try {
+                const eventData = JSON.parse(packet.socketPayload);
+                if (Array.isArray(eventData) && eventData.length >= 1) {
+                  const [eventName] = eventData;
+                  if (eventName === 'connected' || eventName === 'session_created') {
+                    sessionReceived = true;
+                    wsSessionReceived.add(Date.now() - startTime);
+                  }
+                }
+              } catch (e) {
+                // JSON parse error
+              }
+              break;
           }
-        }
-      } catch (e) {
-        // Not JSON, might be Socket.IO protocol
+          break;
       }
     });
 

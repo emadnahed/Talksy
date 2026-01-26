@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { UserService } from './user.service';
+import { CacheService } from '@/cache/cache.service';
 import * as bcrypt from 'bcrypt';
 
 describe('UserService', () => {
@@ -23,6 +24,18 @@ describe('UserService', () => {
               };
               return config[key] ?? defaultValue;
             }),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(true),
+            getUser: jest.fn().mockReturnValue(undefined),
+            getUserIdByEmail: jest.fn().mockReturnValue(undefined),
+            setUser: jest.fn(),
+            invalidateUser: jest.fn(),
+            invalidateAllTokensForUser: jest.fn(),
+            clearAll: jest.fn(),
           },
         },
       ],

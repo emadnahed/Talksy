@@ -12,6 +12,8 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from './user.entity';
 import { IUser, ICreateUser, IUserPublic } from './interfaces/user.interface';
+import { CacheService } from '@/cache/cache.service';
+import { toCachedUser } from '@/cache/interfaces/cache.interface';
 
 @Injectable()
 export class UserService implements OnModuleInit, OnModuleDestroy {
@@ -23,12 +25,15 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
   private readonly bcryptRounds: number;
   private isRedisConnected = false;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly cacheService: CacheService,
+  ) {
     this.keyPrefix = this.configService.get<string>(
       'REDIS_KEY_PREFIX',
       'talksy:',
     );
-    this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 10);
+    this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
   }
 
   async onModuleInit(): Promise<void> {
@@ -146,15 +151,29 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       this.emailIndex.set(email, user.id);
     }
 
+    // Populate cache with new user
+    this.cacheService.setUser(toCachedUser(user));
+
     return new User(user);
   }
 
   async findById(id: string): Promise<User | null> {
+    // Check cache first
+    const cached = this.cacheService.getUser(id);
+    if (cached) {
+      this.logger.debug(`User ${id} found in cache`);
+      return new User(cached);
+    }
+
+    // Cache miss - fetch from storage
+    let user: IUser | null = null;
+
     if (this.isRedisConnected && this.redisClient) {
       try {
         const data = await this.redisClient.get(this.getUserKey(id));
-        if (!data) return null;
-        return new User(this.deserializeUser(data));
+        if (data) {
+          user = this.deserializeUser(data);
+        }
       } catch (error) {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -163,13 +182,31 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const user = this.users.get(id);
-    return user ? new User(user) : null;
+    // Fallback to in-memory if Redis not available or failed
+    if (!user && !this.isRedisConnected) {
+      user = this.users.get(id) || null;
+    }
+
+    // Populate cache if found
+    if (user) {
+      this.cacheService.setUser(toCachedUser(user));
+      return new User(user);
+    }
+
+    return null;
   }
 
   async findByEmail(email: string): Promise<User | null> {
     const normalizedEmail = email.toLowerCase();
 
+    // Check email->id cache first
+    const cachedUserId = this.cacheService.getUserIdByEmail(normalizedEmail);
+    if (cachedUserId) {
+      this.logger.debug(`Email ${normalizedEmail} found in cache, userId: ${cachedUserId}`);
+      return this.findById(cachedUserId);
+    }
+
+    // Cache miss - fetch from storage
     if (this.isRedisConnected && this.redisClient) {
       try {
         const userId = await this.redisClient.get(this.getEmailIndexKey(normalizedEmail));
@@ -220,11 +257,21 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
     } else {
       this.users.set(userId, updatedUser);
     }
+
+    // Invalidate and refresh cache (password changed = security event)
+    this.cacheService.invalidateUser(userId, user.email);
+    this.cacheService.setUser(toCachedUser(updatedUser));
+    // Also invalidate all tokens for this user (password change should invalidate sessions)
+    this.cacheService.invalidateAllTokensForUser(userId);
   }
 
   async deleteUser(userId: string): Promise<boolean> {
     const user = await this.findById(userId);
     if (!user) return false;
+
+    // Invalidate cache first
+    this.cacheService.invalidateUser(userId, user.email);
+    this.cacheService.invalidateAllTokensForUser(userId);
 
     if (this.isRedisConnected && this.redisClient) {
       try {
@@ -250,6 +297,9 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
 
   // For testing purposes
   async clearAllUsers(): Promise<void> {
+    // Clear cache first
+    this.cacheService.clearAll();
+
     if (this.isRedisConnected && this.redisClient) {
       try {
         const userKeys = await this.redisClient.keys(`${this.keyPrefix}user:*`);
