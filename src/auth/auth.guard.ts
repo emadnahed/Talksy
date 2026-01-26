@@ -57,8 +57,11 @@ export class JwtAuthGuard implements CanActivate {
             this.logger.log(`Dev mode: attached user to request`);
             return true;
           }
-          // Token invalid, but in dev mode allow anyway
-          this.logger.log('Dev mode: token invalid, bypassing anyway');
+          // Token provided but invalid - log prominently to help debugging
+          this.logger.warn(
+            '⚠️  DEV MODE: Invalid token provided but auth bypassed! ' +
+            'This would fail in production. Check your token generation/validation logic.'
+          );
         }
       } else if (contextType === 'ws') {
         const client: Socket = context.switchToWs().getClient();
@@ -69,6 +72,11 @@ export class JwtAuthGuard implements CanActivate {
             client.data.user = user;
             return true;
           }
+          // Token provided but invalid - log prominently to help debugging
+          this.logger.warn(
+            '⚠️  DEV MODE: Invalid WebSocket token provided but auth bypassed! ' +
+            'This would fail in production. Check your token generation/validation logic.'
+          );
         }
       }
       this.logger.log('Auth bypassed in development mode (no token)');

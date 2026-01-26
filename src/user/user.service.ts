@@ -28,7 +28,7 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       'REDIS_KEY_PREFIX',
       'talksy:',
     );
-    this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 10);
   }
 
   async onModuleInit(): Promise<void> {
@@ -49,7 +49,11 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<boolean | string>('REDIS_ENABLED', false) === 'true';
 
     if (!redisEnabled) {
-      this.logger.log('Redis disabled, using in-memory user storage');
+      this.logger.warn(
+        'Redis disabled, using in-memory user storage. ' +
+        'WARNING: User data will NOT persist across restarts and will NOT be shared across instances. ' +
+        'This mode is ONLY suitable for development/testing with a single instance.'
+      );
       return;
     }
 

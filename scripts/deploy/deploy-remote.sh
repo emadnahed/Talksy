@@ -125,7 +125,7 @@ ssh "$REMOTE_HOST" << EOF
         fi
     fi
 
-    # Restart with Docker Compose
+    # Restart with Docker Compose (preferred)
     if command -v docker-compose &> /dev/null || docker compose version &> /dev/null; then
         if docker compose version &> /dev/null; then
             docker compose -f docker/docker-compose.prod.yml down || true
@@ -134,10 +134,96 @@ ssh "$REMOTE_HOST" << EOF
             docker-compose -f docker/docker-compose.prod.yml down || true
             docker-compose -f docker/docker-compose.prod.yml up -d --build
         fi
+    # Fallback 1: Use PM2 for process management (recommended)
+    elif command -v pm2 &> /dev/null; then
+        echo "Docker not available, using PM2 for process management..."
+
+        # Create PM2 ecosystem file for better configuration
+        cat > ecosystem.config.js << 'PMEOF'
+module.exports = {
+  apps: [{
+    name: 'talksy',
+    script: 'dist/main.js',
+    instances: 'max',
+    exec_mode: 'cluster',
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '1G',
+    env_production: {
+      NODE_ENV: 'production'
+    },
+    error_file: '/var/log/talksy-error.log',
+    out_file: '/var/log/talksy-out.log',
+    log_file: '/var/log/talksy-combined.log',
+    time: true
+  }]
+};
+PMEOF
+
+        # Stop existing process and start with PM2
+        pm2 stop talksy 2>/dev/null || true
+        pm2 delete talksy 2>/dev/null || true
+        pm2 start ecosystem.config.js --env production
+        pm2 save
+
+        echo "PM2 process started. Useful commands:"
+        echo "  pm2 logs talksy    - View logs"
+        echo "  pm2 monit          - Monitor processes"
+        echo "  pm2 restart talksy - Restart application"
+
+    # Fallback 2: Use systemd for process management
+    elif [ -d "/etc/systemd/system" ] && command -v systemctl &> /dev/null; then
+        echo "Docker/PM2 not available, configuring systemd service..."
+
+        # Create systemd service file
+        sudo tee /etc/systemd/system/talksy.service > /dev/null << SVCEOF
+[Unit]
+Description=Talksy API Server
+After=network.target
+
+[Service]
+Type=simple
+User=\$(whoami)
+WorkingDirectory=$REMOTE_DIR
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/talksy.log
+StandardError=append:/var/log/talksy-error.log
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+        # Reload systemd and start service
+        sudo systemctl daemon-reload
+        sudo systemctl stop talksy 2>/dev/null || true
+        sudo systemctl start talksy
+        sudo systemctl enable talksy
+
+        echo "Systemd service configured. Useful commands:"
+        echo "  sudo systemctl status talksy  - Check status"
+        echo "  sudo journalctl -u talksy -f  - View logs"
+        echo "  sudo systemctl restart talksy - Restart service"
+
+    # Fallback 3: Basic nohup (NOT recommended for production)
     else
-        # Fallback: Run with Node directly
+        echo "⚠️  WARNING: No robust process manager available!"
+        echo "   Docker, PM2, and systemd are not available."
+        echo "   Using basic nohup - process will NOT auto-restart on crash."
+        echo ""
+        echo "   For production, please install one of:"
+        echo "   - Docker: https://docs.docker.com/engine/install/"
+        echo "   - PM2: npm install -g pm2"
+        echo "   - Or use a systemd-enabled Linux distribution"
+        echo ""
+
         pkill -f "node dist/main" || true
         nohup node dist/main > /var/log/talksy.log 2>&1 &
+
+        echo "Process started with PID: \$!"
+        echo "Logs: tail -f /var/log/talksy.log"
     fi
 
     echo "Deployment complete!"
@@ -171,5 +257,10 @@ echo "  WebSocket:   ws://$REMOTE_IP:3000"
 echo "  Health:      http://$REMOTE_IP:3000/health"
 echo ""
 echo "  SSH:         ssh $REMOTE_HOST"
-echo "  Logs:        ssh $REMOTE_HOST 'docker logs talksy-prod-app'"
+echo ""
+echo "  View logs (depends on deployment method):"
+echo "    Docker:    ssh $REMOTE_HOST 'docker logs talksy-prod-app -f'"
+echo "    PM2:       ssh $REMOTE_HOST 'pm2 logs talksy'"
+echo "    systemd:   ssh $REMOTE_HOST 'sudo journalctl -u talksy -f'"
+echo "    nohup:     ssh $REMOTE_HOST 'tail -f /var/log/talksy.log'"
 echo ""

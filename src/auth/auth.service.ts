@@ -71,7 +71,11 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<boolean | string>('REDIS_ENABLED', false) === 'true';
 
     if (!redisEnabled) {
-      this.logger.log('Redis disabled, using in-memory refresh token storage');
+      this.logger.warn(
+        'Redis disabled, using in-memory refresh token storage. ' +
+        'WARNING: Refresh tokens will NOT persist across restarts and will NOT be shared across instances. ' +
+        'This mode is ONLY suitable for development/testing with a single instance.'
+      );
       return;
     }
 
@@ -107,6 +111,11 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const unit = expiry.slice(-1);
     const value = parseInt(expiry.slice(0, -1), 10);
 
+    if (isNaN(value) || value <= 0) {
+      this.logger.error(`Invalid expiry value: ${expiry}. Using secure default of 1 minute.`);
+      return 60 * 1000; // Fail securely with short default
+    }
+
     switch (unit) {
       case 's':
         return value * 1000;
@@ -117,7 +126,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       case 'd':
         return value * 24 * 60 * 60 * 1000;
       default:
-        return 7 * 24 * 60 * 60 * 1000; // Default 7 days
+        // Security: Don't default to long expiry if unit is unrecognized
+        this.logger.error(
+          `Unrecognized expiry unit '${unit}' in '${expiry}'. ` +
+          `Valid units: s (seconds), m (minutes), h (hours), d (days). ` +
+          `Using secure default of 1 minute.`
+        );
+        return 60 * 1000; // Fail securely with short default (1 minute)
     }
   }
 
