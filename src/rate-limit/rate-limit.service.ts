@@ -18,13 +18,32 @@ export class RateLimitService implements OnModuleDestroy {
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(private readonly configService: ConfigService) {
+    const enabledValue = this.configService.get('RATE_LIMIT_ENABLED');
+    const windowMsValue = this.configService.get('RATE_LIMIT_WINDOW_MS');
+    const maxRequestsValue = this.configService.get('RATE_LIMIT_MAX_REQUESTS');
+
+    // Parse config values, handling both boolean and string types
+    const parseBoolean = (value: unknown, defaultValue: boolean): boolean => {
+      if (value === undefined || value === null) return defaultValue;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') return value.toLowerCase() === 'true';
+      return defaultValue;
+    };
+
+    const parseNumber = (value: unknown, defaultValue: number): number => {
+      if (value === undefined || value === null) return defaultValue;
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? defaultValue : parsed;
+      }
+      return defaultValue;
+    };
+
     this.config = {
-      enabled: this.configService.get<boolean>('RATE_LIMIT_ENABLED', true),
-      windowMs: this.configService.get<number>('RATE_LIMIT_WINDOW_MS', 60000),
-      maxRequests: this.configService.get<number>(
-        'RATE_LIMIT_MAX_REQUESTS',
-        10,
-      ),
+      enabled: parseBoolean(enabledValue, true),
+      windowMs: parseNumber(windowMsValue, 60000),
+      maxRequests: parseNumber(maxRequestsValue, 10),
     };
 
     // Periodic cleanup of old entries

@@ -1,0 +1,59 @@
+version: '3.8'
+
+# Development Docker Compose - for local Docker development
+# Usage: docker-compose -f docker/docker-compose.dev.yml up
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: talksy-dev-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - talksy-dev-network
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: talksy-dev-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SESSION_TTL_MS=3600000
+      - SESSION_DISCONNECT_GRACE_MS=300000
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      - AUTH_ENABLED=false
+      - AUTH_BYPASS_IN_DEV=true
+      - LOG_LEVEL=debug
+      - LOG_HTTP_REQUESTS=true
+      - LOG_WS_EVENTS=true
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - talksy-dev-network
+    restart: unless-stopped
+
+volumes:
+  redis-dev-data:
+    driver: local
+
+networks:
+  talksy-dev-network:
+    driver: bridge

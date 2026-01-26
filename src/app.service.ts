@@ -25,6 +25,17 @@ export class AppService {
   ) {}
 
   /**
+   * Get basic application info for root endpoint
+   */
+  getAppInfo(): { name: string; version: string; status: string } {
+    return {
+      name: 'Talksy',
+      version: this.getVersion(),
+      status: 'running',
+    };
+  }
+
+  /**
    * Simple health check for backwards compatibility
    */
   getHealth(): { status: string; timestamp: string } {

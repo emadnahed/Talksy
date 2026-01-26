@@ -308,4 +308,131 @@ describe('RateLimitService', () => {
       expect(service.getRequestCount('client-1')).toBe(0);
     });
   });
+
+  describe('cleanup interval', () => {
+    it('should automatically clean up old entries via interval', async () => {
+      jest.useFakeTimers();
+
+      // Create a service with a short cleanup interval for testing
+      const shortWindowConfigService = {
+        get: jest.fn((key: string, defaultValue?: unknown) => {
+          const config: Record<string, unknown> = {
+            RATE_LIMIT_ENABLED: true,
+            RATE_LIMIT_WINDOW_MS: 100, // Very short window for testing
+            RATE_LIMIT_MAX_REQUESTS: 10,
+          };
+          return config[key] ?? defaultValue;
+        }),
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [
+          RateLimitService,
+          { provide: ConfigService, useValue: shortWindowConfigService },
+        ],
+      }).compile();
+
+      const shortService = module.get<RateLimitService>(RateLimitService);
+
+      // Record a request
+      shortService.recordRequest('client-1');
+      expect(shortService.getRequestCount('client-1')).toBe(1);
+
+      // Advance time past the window so entries expire
+      jest.advanceTimersByTime(150);
+
+      // Trigger the cleanup by advancing time to when the interval fires
+      jest.advanceTimersByTime(100);
+
+      // Requests should be cleaned up
+      expect(shortService.getRequestCount('client-1')).toBe(0);
+
+      shortService.onModuleDestroy();
+      jest.useRealTimers();
+    });
+
+    it('should clean up entries when timestamps are partially removed', async () => {
+      jest.useFakeTimers();
+
+      const shortWindowConfigService = {
+        get: jest.fn((key: string, defaultValue?: unknown) => {
+          const config: Record<string, unknown> = {
+            RATE_LIMIT_ENABLED: true,
+            RATE_LIMIT_WINDOW_MS: 100,
+            RATE_LIMIT_MAX_REQUESTS: 10,
+          };
+          return config[key] ?? defaultValue;
+        }),
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [
+          RateLimitService,
+          { provide: ConfigService, useValue: shortWindowConfigService },
+        ],
+      }).compile();
+
+      const shortService = module.get<RateLimitService>(RateLimitService);
+
+      // Record first request
+      shortService.recordRequest('client-1');
+
+      // Advance time but not past the window
+      jest.advanceTimersByTime(50);
+
+      // Record second request
+      shortService.recordRequest('client-1');
+
+      // Advance time past first request window but not second
+      jest.advanceTimersByTime(60);
+
+      // Now the first request is expired, second is still valid
+      // This will update lastCleanup when some but not all timestamps are removed
+      expect(shortService.getRequestCount('client-1')).toBe(1);
+
+      shortService.onModuleDestroy();
+      jest.useRealTimers();
+    });
+
+    it('should remove client completely when all timestamps expire', async () => {
+      jest.useFakeTimers();
+
+      const shortWindowConfigService = {
+        get: jest.fn((key: string, defaultValue?: unknown) => {
+          const config: Record<string, unknown> = {
+            RATE_LIMIT_ENABLED: true,
+            RATE_LIMIT_WINDOW_MS: 100,
+            RATE_LIMIT_MAX_REQUESTS: 10,
+          };
+          return config[key] ?? defaultValue;
+        }),
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [
+          RateLimitService,
+          { provide: ConfigService, useValue: shortWindowConfigService },
+        ],
+      }).compile();
+
+      const shortService = module.get<RateLimitService>(RateLimitService);
+
+      // Record requests
+      shortService.recordRequest('client-1');
+      shortService.recordRequest('client-2');
+
+      // Advance time past window
+      jest.advanceTimersByTime(150);
+
+      // Force cleanup interval
+      jest.advanceTimersByTime(100);
+
+      // Both clients should be cleaned up completely
+      expect(shortService.getRequestCount('client-1')).toBe(0);
+      expect(shortService.getRequestCount('client-2')).toBe(0);
+
+      shortService.onModuleDestroy();
+      jest.useRealTimers();
+    });
+  });
 });

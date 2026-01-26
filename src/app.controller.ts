@@ -6,6 +6,11 @@ import { HealthCheckDto } from './common/dto/health-check.dto';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  @Get()
+  getRoot(): { name: string; version: string; status: string } {
+    return this.appService.getAppInfo();
+  }
+
   @Get('health')
   getHealth(): { status: string; timestamp: string } {
     return this.appService.getHealth();
