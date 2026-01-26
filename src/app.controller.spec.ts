@@ -8,6 +8,7 @@ describe('AppController', () => {
   let service: AppService;
 
   const mockAppService = {
+    getAppInfo: jest.fn(),
     getHealth: jest.fn(),
     getDetailedHealth: jest.fn(),
   };
@@ -28,6 +29,23 @@ describe('AppController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  describe('getRoot', () => {
+    it('should return app info from service', () => {
+      const mockAppInfo = {
+        name: 'Talksy',
+        version: '0.0.1',
+        status: 'running',
+      };
+
+      mockAppService.getAppInfo.mockReturnValue(mockAppInfo);
+
+      const result = controller.getRoot();
+
+      expect(result).toEqual(mockAppInfo);
+      expect(service.getAppInfo).toHaveBeenCalled();
+    });
   });
 
   describe('getHealth', () => {

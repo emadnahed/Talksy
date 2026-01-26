@@ -10,6 +10,7 @@ import { AIProviderType } from './interfaces/ai-config.interface';
 import { SessionMessageDto } from '../session/dto/session-message.dto';
 import { MockAIProvider } from './providers/mock-ai.provider';
 import { OpenAIProvider } from './providers/openai.provider';
+import { GroqProvider } from './providers/groq.provider';
 import { AI_DEFAULTS, AI_ERRORS } from './constants/ai.constants';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class AIService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly mockProvider: MockAIProvider,
     private readonly openaiProvider: OpenAIProvider,
+    private readonly groqProvider: GroqProvider,
   ) {
     this.configuredProviderType =
       (this.configService.get<string>('AI_PROVIDER') as AIProviderType) ??
@@ -37,6 +39,7 @@ export class AIService implements OnModuleInit {
   private registerProviders(): void {
     this.providers.set(this.mockProvider.name, this.mockProvider);
     this.providers.set(this.openaiProvider.name, this.openaiProvider);
+    this.providers.set(this.groqProvider.name, this.groqProvider);
 
     this.logger.log(
       `Registered ${this.providers.size} AI providers: ${Array.from(this.providers.keys()).join(', ')}`,

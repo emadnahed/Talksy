@@ -879,4 +879,47 @@ describe('SessionService', () => {
       }).not.toThrow();
     });
   });
+
+  describe('getDisconnectedSessionCount', () => {
+    it('should return 0 when no sessions exist', () => {
+      expect(service.getDisconnectedSessionCount()).toBe(0);
+    });
+
+    it('should return 0 when all sessions are active', () => {
+      service.createSession('client-1');
+      service.createSession('client-2');
+
+      expect(service.getDisconnectedSessionCount()).toBe(0);
+    });
+
+    it('should return correct count of disconnected sessions', () => {
+      service.createSession('client-1');
+      service.createSession('client-2');
+      service.createSession('client-3');
+      service.markDisconnected('client-1');
+      service.markDisconnected('client-3');
+
+      expect(service.getDisconnectedSessionCount()).toBe(2);
+    });
+
+    it('should not count destroyed sessions', () => {
+      service.createSession('client-1');
+      service.createSession('client-2');
+      service.markDisconnected('client-1');
+      service.destroySession('client-1');
+
+      expect(service.getDisconnectedSessionCount()).toBe(0);
+    });
+
+    it('should update count when session reconnects', () => {
+      service.createSession('client-1');
+      service.markDisconnected('client-1');
+
+      expect(service.getDisconnectedSessionCount()).toBe(1);
+
+      service.reconnectSession('client-1');
+
+      expect(service.getDisconnectedSessionCount()).toBe(0);
+    });
+  });
 });

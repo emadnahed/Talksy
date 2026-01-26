@@ -43,6 +43,23 @@ describe('AppService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('getAppInfo', () => {
+    it('should return app info with name, version, and status', () => {
+      const result = service.getAppInfo();
+
+      expect(result).toHaveProperty('name', 'Talksy');
+      expect(result).toHaveProperty('version');
+      expect(result).toHaveProperty('status', 'running');
+    });
+
+    it('should return a valid version string', () => {
+      const result = service.getAppInfo();
+
+      expect(typeof result.version).toBe('string');
+      expect(result.version.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('getHealth', () => {
     it('should return health status with ok and timestamp', () => {
       const result = service.getHealth();

@@ -16,11 +16,10 @@ const mockRedisClient = {
   on: jest.fn(),
 };
 
-// Mock ioredis
+// Mock ioredis - handle both default and named exports
 jest.mock('ioredis', () => {
-  return {
-    default: jest.fn().mockImplementation(() => mockRedisClient),
-  };
+  const MockRedis = jest.fn().mockImplementation(() => mockRedisClient);
+  return MockRedis;
 });
 
 describe('RedisStorageAdapter', () => {

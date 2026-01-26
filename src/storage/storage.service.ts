@@ -22,10 +22,11 @@ export class StorageService implements SessionStorage, OnModuleInit {
   }
 
   async initializeStorage(): Promise<void> {
-    const redisEnabled = this.configService.get<boolean>(
+    const redisEnabledValue = this.configService.get<boolean | string>(
       'REDIS_ENABLED',
       false,
     );
+    const redisEnabled = redisEnabledValue === true || redisEnabledValue === 'true';
 
     if (redisEnabled) {
       this.logger.log('Attempting to connect to Redis...');
@@ -42,7 +43,7 @@ export class StorageService implements SessionStorage, OnModuleInit {
     }
 
     this.activeAdapter = this.inMemoryAdapter;
-    this.usingFallback = redisEnabled; // Only true if Redis was enabled but failed
+    this.usingFallback = !!redisEnabled; // Only true if Redis was enabled but failed
     this.logger.log('Using in-memory storage adapter');
   }
 

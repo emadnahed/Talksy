@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AIService } from './ai.service';
 import { MockAIProvider } from './providers/mock-ai.provider';
 import { OpenAIProvider } from './providers/openai.provider';
+import { GroqProvider } from './providers/groq.provider';
 import {
   SessionMessageDto,
   MessageRole,
@@ -33,6 +34,13 @@ describe('AIService', () => {
     generateStream: jest.fn(),
   };
 
+  const mockGroqProvider = {
+    name: 'groq',
+    isAvailable: false,
+    generateCompletion: jest.fn(),
+    generateStream: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     mockConfigService.get.mockReturnValue('mock');
@@ -43,6 +51,7 @@ describe('AIService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: MockAIProvider, useValue: mockMockProvider },
         { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+        { provide: GroqProvider, useValue: mockGroqProvider },
       ],
     }).compile();
 
@@ -84,6 +93,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -104,6 +114,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -126,6 +137,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -144,6 +156,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -174,6 +187,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -200,6 +214,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: mockMockProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
@@ -364,6 +379,7 @@ describe('AIService', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: MockAIProvider, useValue: noStreamProvider },
           { provide: OpenAIProvider, useValue: mockOpenAIProvider },
+          { provide: GroqProvider, useValue: mockGroqProvider },
         ],
       }).compile();
 
