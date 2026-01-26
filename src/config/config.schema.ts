@@ -63,4 +63,10 @@ export const configValidationSchema = Joi.object({
   LOG_FORMAT: Joi.string().valid('json', 'text').default('json'),
   LOG_WS_EVENTS: Joi.boolean().default(true),
   LOG_HTTP_REQUESTS: Joi.boolean().default(true),
+  LOG_WS_SKIP_HIGH_FREQUENCY: Joi.boolean().default(true), // Skip stream_chunk etc.
+
+  // AI Response Cache configuration
+  AI_CACHE_ENABLED: Joi.boolean().default(true),
+  AI_CACHE_TTL_MS: Joi.number().default(3600000), // 1 hour
+  AI_CACHE_MAX_SIZE: Joi.number().default(500),
 });

@@ -120,7 +120,8 @@ describe('SessionService', () => {
       const session1 = service.createSession(clientId);
       const session2 = service.createSession(clientId);
 
-      expect(session1).toBe(session2);
+      // Sessions are now returned as copies, so use toEqual for deep comparison
+      expect(session1).toEqual(session2);
     });
 
     it('should create new session if existing one is disconnected', () => {
@@ -185,9 +186,8 @@ describe('SessionService', () => {
 
       service.createSession(clientId);
 
-      // Manually expire the session without triggering timers
-      const session = service.getSession(clientId)!;
-      session.expiresAt = new Date(Date.now() - 1000);
+      // Force-expire the session without triggering timers
+      service.forceExpireSession(clientId);
 
       // getSession should find it expired and destroy it
       const result = service.getSession(clientId);
@@ -409,9 +409,8 @@ describe('SessionService', () => {
 
       service.createSession(clientId);
 
-      // Manually expire the session without triggering timers
-      const session = service.getSession(clientId)!;
-      session.expiresAt = new Date(Date.now() - 1000);
+      // Force-expire the session without triggering timers
+      service.forceExpireSession(clientId);
 
       // hasSession should return false for expired session
       expect(service.hasSession(clientId)).toBe(false);
@@ -783,9 +782,8 @@ describe('SessionService', () => {
 
       cleanupService.createSession('client-1');
 
-      // Manually expire the session by modifying expiresAt
-      const session = cleanupService.getSession('client-1')!;
-      session.expiresAt = new Date(Date.now() - 1000);
+      // Force-expire the session
+      cleanupService.forceExpireSession('client-1');
 
       // Advance past cleanup interval
       jest.advanceTimersByTime(SESSION_DEFAULTS.CLEANUP_INTERVAL_MS + 1000);
@@ -813,11 +811,9 @@ describe('SessionService', () => {
       cleanupService.createSession('client-2');
       cleanupService.createSession('client-3');
 
-      // Manually expire sessions
-      const session1 = cleanupService.getSession('client-1')!;
-      const session2 = cleanupService.getSession('client-2')!;
-      session1.expiresAt = new Date(Date.now() - 1000);
-      session2.expiresAt = new Date(Date.now() - 1000);
+      // Force-expire sessions 1 and 2
+      cleanupService.forceExpireSession('client-1');
+      cleanupService.forceExpireSession('client-2');
 
       // Advance past cleanup interval
       jest.advanceTimersByTime(SESSION_DEFAULTS.CLEANUP_INTERVAL_MS + 1000);
@@ -846,9 +842,8 @@ describe('SessionService', () => {
       cleanupService.createSession('client-1');
       cleanupService.markDisconnected('client-1');
 
-      // Manually set expired time but it's disconnected so cleanup should skip
-      const session = cleanupService.getSession('client-1')!;
-      session.expiresAt = new Date(Date.now() - 1000);
+      // Force-expire the session but it's disconnected so cleanup should skip
+      cleanupService.forceExpireSession('client-1');
 
       // Advance past cleanup interval
       jest.advanceTimersByTime(SESSION_DEFAULTS.CLEANUP_INTERVAL_MS + 1000);

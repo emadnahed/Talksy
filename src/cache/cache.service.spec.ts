@@ -180,7 +180,7 @@ describe('CacheService', () => {
       expect(hash1).not.toBe('token1'); // Should be hashed
       expect(hash1).toBe(hash1Again); // Should be deterministic
       expect(hash1).not.toBe(hash2); // Different tokens = different hashes
-      expect(hash1.length).toBe(32); // SHA256 substring
+      expect(hash1.length).toBe(64); // Full SHA256 hash for maximum collision resistance
     });
 
     it('should cache with custom TTL', () => {

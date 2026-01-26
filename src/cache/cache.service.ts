@@ -16,6 +16,8 @@ export class CacheService implements OnModuleInit {
   private userCache!: LRUCache<CachedUser>;
   private tokenCache!: LRUCache<CachedTokenValidation>;
   private emailToIdCache!: LRUCache<string>; // Maps email -> userId for quick lookups
+  // Reverse index: userId -> Set of token hashes (for granular token invalidation)
+  private readonly userToTokenHashes = new Map<string, Set<string>>();
   private readonly config: CacheConfig;
 
   constructor(private readonly configService: ConfigService) {
@@ -123,9 +125,10 @@ export class CacheService implements OnModuleInit {
 
   /**
    * Hash a token for use as cache key (never store raw tokens)
+   * Uses full SHA256 (64 chars) for maximum collision resistance
    */
   hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex').substring(0, 32);
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -163,6 +166,15 @@ export class CacheService implements OnModuleInit {
     };
 
     this.tokenCache.set(tokenHash, cached, ttlMs);
+
+    // Maintain reverse index for granular per-user invalidation
+    let userTokens = this.userToTokenHashes.get(authUser.userId);
+    if (!userTokens) {
+      userTokens = new Set<string>();
+      this.userToTokenHashes.set(authUser.userId, userTokens);
+    }
+    userTokens.add(tokenHash);
+
     this.logger.debug(`Token cached: ${tokenHash.substring(0, 8)}...`);
   }
 
@@ -173,22 +185,50 @@ export class CacheService implements OnModuleInit {
     if (!this.config.enabled) return;
 
     const tokenHash = this.hashToken(token);
+    const cached = this.tokenCache.get(tokenHash);
+
+    // Remove from reverse index if we know the user
+    if (cached) {
+      const userTokens = this.userToTokenHashes.get(cached.userId);
+      if (userTokens) {
+        userTokens.delete(tokenHash);
+        if (userTokens.size === 0) {
+          this.userToTokenHashes.delete(cached.userId);
+        }
+      }
+    }
+
     this.tokenCache.delete(tokenHash);
     this.logger.debug(`Token cache invalidated: ${tokenHash.substring(0, 8)}...`);
   }
 
   /**
-   * Invalidate all tokens for a user (on logout-all or password change)
-   * Note: This clears the entire token cache as we don't track user->token mapping
+   * Invalidate all tokens for a specific user (on logout-all or password change)
+   * Uses reverse index for granular invalidation without affecting other users
    */
   invalidateAllTokensForUser(userId: string): void {
     if (!this.config.enabled) return;
 
-    // Since we don't maintain a reverse index of userId -> tokenHashes,
-    // we clear the token cache on security-critical events
-    // This is a trade-off: simpler implementation vs. more aggressive invalidation
-    this.tokenCache.clear();
-    this.logger.debug(`All token cache cleared due to security event for user: ${userId}`);
+    const userTokens = this.userToTokenHashes.get(userId);
+    if (!userTokens || userTokens.size === 0) {
+      this.logger.debug(`No cached tokens found for user: ${userId}`);
+      return;
+    }
+
+    // Invalidate only this user's tokens
+    let invalidatedCount = 0;
+    for (const tokenHash of userTokens) {
+      if (this.tokenCache.delete(tokenHash)) {
+        invalidatedCount++;
+      }
+    }
+
+    // Clear the reverse index entry for this user
+    this.userToTokenHashes.delete(userId);
+
+    this.logger.debug(
+      `Invalidated ${invalidatedCount} cached tokens for user: ${userId}`,
+    );
   }
 
   // ==================== Maintenance ====================
@@ -225,6 +265,7 @@ export class CacheService implements OnModuleInit {
     this.userCache.clear();
     this.tokenCache.clear();
     this.emailToIdCache.clear();
+    this.userToTokenHashes.clear();
     this.logger.log('All caches cleared');
   }
 
@@ -236,13 +277,44 @@ export class CacheService implements OnModuleInit {
     const userPruned = this.userCache.prune();
     const tokenPruned = this.tokenCache.prune();
     const emailPruned = this.emailToIdCache.prune();
+
+    // Clean up orphaned entries in reverse index (tokens evicted by LRU or TTL)
+    const reverseIndexPruned = this.pruneReverseIndex();
+
     const total = userPruned + tokenPruned + emailPruned;
 
-    if (total > 0) {
-      this.logger.debug(`Pruned ${total} expired cache entries`);
+    if (total > 0 || reverseIndexPruned > 0) {
+      this.logger.debug(
+        `Pruned ${total} expired cache entries, ${reverseIndexPruned} orphaned reverse index entries`,
+      );
     }
 
     return total;
+  }
+
+  /**
+   * Clean up orphaned entries in the user->token reverse index
+   * This handles tokens that were evicted from LRU cache
+   */
+  private pruneReverseIndex(): number {
+    let pruned = 0;
+
+    for (const [userId, tokenHashes] of this.userToTokenHashes.entries()) {
+      for (const tokenHash of tokenHashes) {
+        // Check if token still exists in cache (using has() to avoid updating access time)
+        if (!this.tokenCache.has(tokenHash)) {
+          tokenHashes.delete(tokenHash);
+          pruned++;
+        }
+      }
+
+      // Remove user entry if no tokens left
+      if (tokenHashes.size === 0) {
+        this.userToTokenHashes.delete(userId);
+      }
+    }
+
+    return pruned;
   }
 
   /**
