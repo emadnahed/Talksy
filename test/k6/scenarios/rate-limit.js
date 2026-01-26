@@ -7,57 +7,91 @@ import {
   rateLimitRejections,
   wsErrors,
 } from '../utils/metrics.js';
+import { getEnvConfig } from '../config/environments.js';
 
 export const options = {
   stages: rateLimitStages,
   thresholds: rateLimitThresholds,
 };
 
-const BASE_URL = __ENV.BASE_URL || 'ws://localhost:3000';
+const config = getEnvConfig(__ENV.ENV);
 
 // Number of rapid-fire messages to send (should exceed rate limit)
 const MESSAGES_TO_SEND = 15;
+
+/**
+ * Parse Socket.IO Engine.IO packet
+ */
+function parseSocketIOMessage(data) {
+  if (!data || data.length === 0) return null;
+
+  const packetType = data.charAt(0);
+  const payload = data.substring(1);
+
+  return {
+    engineType: packetType,
+    payload,
+    socketType: packetType === '4' && payload.length > 0 ? payload.charAt(0) : null,
+    socketPayload: packetType === '4' && payload.length > 1 ? payload.substring(1) : null,
+  };
+}
 
 export default function () {
   let messagesSent = 0;
   let rateLimitErrors = 0;
   let normalResponses = 0;
-  let isConnected = false;
 
-  const res = ws.connect(BASE_URL, {}, function (socket) {
-    socket.on('open', function () {
-      isConnected = true;
-    });
-
+  const res = ws.connect(config.baseUrl, {}, function (socket) {
     socket.on('message', function (data) {
-      try {
-        const message = JSON.parse(data);
+      const packet = parseSocketIOMessage(data);
+      if (!packet) return;
 
-        if (Array.isArray(message) && message.length >= 2) {
-          const [eventName, eventData] = message;
+      switch (packet.engineType) {
+        case '0': // Open - server sends session info
+          socket.send('40'); // Connect to default namespace
+          break;
 
-          if (eventName === 'connected' || eventName === 'session_created') {
-            // Rapid-fire messages to trigger rate limiting
-            for (let i = 0; i < MESSAGES_TO_SEND; i++) {
-              const payload = JSON.stringify(['user_message', { text: `Burst message ${i}` }]);
-              socket.send('42' + payload);
-              messagesSent++;
-            }
+        case '2': // Ping - respond with pong
+          socket.send('3');
+          break;
+
+        case '4': // Message - contains Socket.IO packet
+          switch (packet.socketType) {
+            case '0': // Connected to namespace
+              break;
+
+            case '2': // Event
+              try {
+                const eventData = JSON.parse(packet.socketPayload);
+                if (Array.isArray(eventData) && eventData.length >= 1) {
+                  const [eventName, data] = eventData;
+
+                  if (eventName === 'connected' || eventName === 'session_created') {
+                    // Rapid-fire messages to trigger rate limiting
+                    for (let i = 0; i < MESSAGES_TO_SEND; i++) {
+                      const payload = JSON.stringify(['user_message', { text: `Burst message ${i}` }]);
+                      socket.send('42' + payload);
+                      messagesSent++;
+                    }
+                  }
+
+                  if (eventName === 'assistant_response') {
+                    normalResponses++;
+                  }
+
+                  if (eventName === 'error') {
+                    if (data && data.code === 'RATE_LIMIT_EXCEEDED') {
+                      rateLimitErrors++;
+                      rateLimitRejections.add(1);
+                    }
+                  }
+                }
+              } catch (e) {
+                // JSON parse error
+              }
+              break;
           }
-
-          if (eventName === 'assistant_response') {
-            normalResponses++;
-          }
-
-          if (eventName === 'error') {
-            if (eventData && eventData.code === 'RATE_LIMIT_EXCEEDED') {
-              rateLimitErrors++;
-              rateLimitRejections.add(1);
-            }
-          }
-        }
-      } catch (e) {
-        // Not JSON
+          break;
       }
     });
 

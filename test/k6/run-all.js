@@ -31,6 +31,13 @@ const wsTotalErrors = new Counter('ws_total_errors');
 const httpResponseTime = new Trend('http_response_time', true);
 const httpSuccessRate = new Rate('http_success_rate');
 
+// Auth cache metrics
+const authRequestDuration = new Trend('auth_request_duration', true);
+const authWarmDuration = new Trend('auth_warm_duration', true);
+const authColdDuration = new Trend('auth_cold_duration', true);
+const authSuccessRate = new Rate('auth_success_rate');
+const authRequestsTotal = new Counter('auth_requests_total');
+
 export const options = {
   scenarios: {
     health_check: {
@@ -77,6 +84,19 @@ export const options = {
       exec: 'streamingTest',
       startTime: isSmoke ? '55s' : '215s',
     },
+    auth_cache_test: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: isSmoke
+        ? [{ duration: '15s', target: 5 }]
+        : [
+            { duration: '30s', target: 10 },
+            { duration: '30s', target: 25 },
+            { duration: '30s', target: 0 },
+          ],
+      exec: 'authCacheTest',
+      startTime: isSmoke ? '75s' : '280s',
+    },
   },
   thresholds: {
     ws_connecting: ['p(95)<1000'],
@@ -85,8 +105,38 @@ export const options = {
     ws_total_errors: ['count<100'],
     http_response_time: ['p(95)<500'],
     http_success_rate: ['rate>0.99'],
+    // Auth cache thresholds
+    auth_request_duration: ['p(95)<300'],
+    auth_warm_duration: ['p(95)<100'],
+    auth_success_rate: ['rate>0.95'],
   },
 };
+
+/**
+ * Parse Socket.IO Engine.IO packet
+ * Packet format: <packet_type>[data]
+ * - 0: open (server sends session info)
+ * - 2: ping (server sends, client responds with 3)
+ * - 3: pong
+ * - 4: message (contains Socket.IO packet)
+ *
+ * Socket.IO packet format (after 4): <packet_type>[data]
+ * - 0: connect
+ * - 2: event (followed by JSON array)
+ */
+function parseSocketIOMessage(data) {
+  if (!data || data.length === 0) return null;
+
+  const packetType = data.charAt(0);
+  const payload = data.substring(1);
+
+  return {
+    engineType: packetType,
+    payload,
+    socketType: packetType === '4' && payload.length > 0 ? payload.charAt(0) : null,
+    socketPayload: packetType === '4' && payload.length > 1 ? payload.substring(1) : null,
+  };
+}
 
 // Health check test
 export function healthCheck() {
@@ -107,20 +157,44 @@ export function healthCheck() {
 // WebSocket connection test
 export function connectionTest() {
   const startTime = Date.now();
+  let connectionSuccessful = false;
+  let sessionReceived = false;
 
   const res = ws.connect(config.baseUrl, {}, function (socket) {
     const connectTime = Date.now() - startTime;
     wsConnecting.add(connectTime);
     wsTotalConnections.add(1);
 
+    socket.on('open', function () {
+      connectionSuccessful = true;
+    });
+
     socket.on('message', function (data) {
-      try {
-        const message = JSON.parse(data);
-        if (Array.isArray(message) && message[0] === 'connected') {
-          wsSuccessRate.add(1);
-        }
-      } catch (e) {
-        // Ignore parse errors
+      const packet = parseSocketIOMessage(data);
+      if (!packet) return;
+
+      switch (packet.engineType) {
+        case '0': // Open - server sends session info
+          socket.send('40'); // Connect to default namespace
+          break;
+
+        case '2': // Ping - respond with pong
+          socket.send('3');
+          break;
+
+        case '4': // Message - contains Socket.IO packet
+          if (packet.socketType === '2') { // Event
+            try {
+              const eventData = JSON.parse(packet.socketPayload);
+              if (Array.isArray(eventData) && eventData[0] === 'connected') {
+                sessionReceived = true;
+                wsSuccessRate.add(1);
+              }
+            } catch (e) {
+              // JSON parse error
+            }
+          }
+          break;
       }
     });
 
@@ -130,8 +204,11 @@ export function connectionTest() {
     });
 
     socket.setTimeout(function () {
+      if (!sessionReceived) {
+        wsSuccessRate.add(0);
+      }
       socket.close();
-    }, 3000);
+    }, 5000);
   });
 
   check(res, {
@@ -148,34 +225,50 @@ export function connectionTest() {
 // Message flow test
 export function messageTest() {
   let responseReceived = false;
-  const startTime = Date.now();
+  let messageStartTime = 0;
 
   const res = ws.connect(config.baseUrl, {}, function (socket) {
     wsTotalConnections.add(1);
-    let messageStartTime = 0;
 
     socket.on('message', function (data) {
-      try {
-        const message = JSON.parse(data);
-        if (Array.isArray(message)) {
-          const [event] = message;
+      const packet = parseSocketIOMessage(data);
+      if (!packet) return;
 
-          if (event === 'connected' || event === 'session_created') {
-            messageStartTime = Date.now();
-            const payload = JSON.stringify(['user_message', { text: 'Hello from k6' }]);
-            socket.send('42' + payload);
-            wsTotalMessages.add(1);
-          }
+      switch (packet.engineType) {
+        case '0': // Open - server sends session info
+          socket.send('40'); // Connect to default namespace
+          break;
 
-          if (event === 'assistant_response') {
-            responseReceived = true;
-            wsResponseTime.add(Date.now() - messageStartTime);
-            wsSuccessRate.add(1);
-            socket.close();
+        case '2': // Ping - respond with pong
+          socket.send('3');
+          break;
+
+        case '4': // Message - contains Socket.IO packet
+          if (packet.socketType === '2') { // Event
+            try {
+              const eventData = JSON.parse(packet.socketPayload);
+              if (Array.isArray(eventData)) {
+                const [event] = eventData;
+
+                if (event === 'connected' || event === 'session_created') {
+                  messageStartTime = Date.now();
+                  const payload = JSON.stringify(['user_message', { text: 'Hello from k6' }]);
+                  socket.send('42' + payload);
+                  wsTotalMessages.add(1);
+                }
+
+                if (event === 'assistant_response') {
+                  responseReceived = true;
+                  wsResponseTime.add(Date.now() - messageStartTime);
+                  wsSuccessRate.add(1);
+                  socket.close();
+                }
+              }
+            } catch (e) {
+              // JSON parse error
+            }
           }
-        }
-      } catch (e) {
-        // Ignore
+          break;
       }
     });
 
@@ -208,26 +301,43 @@ export function streamingTest() {
     wsTotalConnections.add(1);
 
     socket.on('message', function (data) {
-      try {
-        const message = JSON.parse(data);
-        if (Array.isArray(message)) {
-          const [event] = message;
+      const packet = parseSocketIOMessage(data);
+      if (!packet) return;
 
-          if (event === 'connected' || event === 'session_created') {
-            const payload = JSON.stringify(['user_message_stream', { text: 'Tell me something interesting' }]);
-            socket.send('42' + payload);
-            wsTotalMessages.add(1);
-          }
+      switch (packet.engineType) {
+        case '0': // Open - server sends session info
+          socket.send('40'); // Connect to default namespace
+          break;
 
-          if (event === 'stream_end') {
-            streamCompleted = true;
-            wsResponseTime.add(Date.now() - startTime);
-            wsSuccessRate.add(1);
-            socket.close();
+        case '2': // Ping - respond with pong
+          socket.send('3');
+          break;
+
+        case '4': // Message - contains Socket.IO packet
+          if (packet.socketType === '2') { // Event
+            try {
+              const eventData = JSON.parse(packet.socketPayload);
+              if (Array.isArray(eventData)) {
+                const [event] = eventData;
+
+                if (event === 'connected' || event === 'session_created') {
+                  const payload = JSON.stringify(['user_message_stream', { text: 'Tell me something interesting' }]);
+                  socket.send('42' + payload);
+                  wsTotalMessages.add(1);
+                }
+
+                if (event === 'stream_end') {
+                  streamCompleted = true;
+                  wsResponseTime.add(Date.now() - startTime);
+                  wsSuccessRate.add(1);
+                  socket.close();
+                }
+              }
+            } catch (e) {
+              // JSON parse error
+            }
           }
-        }
-      } catch (e) {
-        // Ignore
+          break;
       }
     });
 
@@ -249,6 +359,75 @@ export function streamingTest() {
   });
 
   sleep(1);
+}
+
+// Auth cache test
+export function authCacheTest() {
+  const vuId = __VU;
+  const iter = __ITER;
+  const email = `k6-auth-${vuId}-${iter}-${Date.now()}@test.com`;
+  const password = 'TestPassword123';
+
+  // Step 1: Register
+  const registerStart = Date.now();
+  const registerRes = http.post(
+    `${config.httpUrl}/auth/register`,
+    JSON.stringify({ email, password }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  const registerDuration = Date.now() - registerStart;
+  authRequestDuration.add(registerDuration);
+  authRequestsTotal.add(1);
+
+  if (registerRes.status !== 201) {
+    authSuccessRate.add(0);
+    return;
+  }
+  authSuccessRate.add(1);
+
+  const accessToken = registerRes.json('data.accessToken');
+  const refreshToken = registerRes.json('data.refreshToken');
+
+  // Step 2: First /auth/me request (cold cache)
+  const coldStart = Date.now();
+  const coldRes = http.get(`${config.httpUrl}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const coldDuration = Date.now() - coldStart;
+  authColdDuration.add(coldDuration);
+  authRequestDuration.add(coldDuration);
+  authRequestsTotal.add(1);
+  authSuccessRate.add(coldRes.status === 200 ? 1 : 0);
+
+  // Step 3: Multiple warm requests (should be faster due to caching)
+  for (let i = 0; i < 5; i++) {
+    const warmStart = Date.now();
+    const warmRes = http.get(`${config.httpUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const warmDuration = Date.now() - warmStart;
+    authWarmDuration.add(warmDuration);
+    authRequestDuration.add(warmDuration);
+    authRequestsTotal.add(1);
+    authSuccessRate.add(warmRes.status === 200 ? 1 : 0);
+  }
+
+  // Step 4: Logout
+  const logoutRes = http.post(
+    `${config.httpUrl}/auth/logout`,
+    JSON.stringify({ refreshToken }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  authRequestsTotal.add(1);
+  authSuccessRate.add(logoutRes.status === 200 ? 1 : 0);
+
+  sleep(0.5);
 }
 
 export function handleSummary(data) {
@@ -303,6 +482,28 @@ function textSummary(data) {
   summary += '\nERRORS:\n';
   if (metrics.ws_total_errors) {
     summary += `  Total: ${metrics.ws_total_errors.values.count}\n`;
+  }
+
+  summary += '\nAUTH CACHE PERFORMANCE:\n';
+  if (metrics.auth_requests_total) {
+    summary += `  Total Auth Requests: ${metrics.auth_requests_total.values.count}\n`;
+  }
+  if (metrics.auth_success_rate) {
+    summary += `  Success Rate: ${((metrics.auth_success_rate.values.rate || 0) * 100).toFixed(2)}%\n`;
+  }
+  if (metrics.auth_cold_duration) {
+    summary += `  Cold Cache (p95): ${metrics.auth_cold_duration.values['p(95)']?.toFixed(2) || 'N/A'}ms\n`;
+  }
+  if (metrics.auth_warm_duration) {
+    summary += `  Warm Cache (p95): ${metrics.auth_warm_duration.values['p(95)']?.toFixed(2) || 'N/A'}ms\n`;
+  }
+  if (metrics.auth_cold_duration && metrics.auth_warm_duration) {
+    const cold = metrics.auth_cold_duration.values['p(95)'] || 0;
+    const warm = metrics.auth_warm_duration.values['p(95)'] || 0;
+    if (cold > 0) {
+      const speedup = ((cold - warm) / cold * 100).toFixed(1);
+      summary += `  Cache Speedup: ~${speedup}%\n`;
+    }
   }
 
   summary += '\n═══════════════════════════════════════════════════════════════\n';

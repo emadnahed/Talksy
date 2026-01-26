@@ -12,6 +12,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { AIModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { CacheModule } from './cache/cache.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
@@ -22,6 +23,7 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
       validationSchema: configValidationSchema,
     }),
     EventEmitterModule.forRoot(),
+    CacheModule,
     StorageModule,
     RateLimitModule,
     UserModule,

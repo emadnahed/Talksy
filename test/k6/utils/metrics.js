@@ -30,3 +30,13 @@ export const rateLimitRejections = new Counter('rate_limit_rejections');
 // Error metrics
 export const wsErrors = new Counter('ws_errors');
 export const wsTimeouts = new Counter('ws_timeouts');
+
+// Auth Cache metrics
+export const authCacheHits = new Counter('auth_cache_hits');
+export const authCacheMisses = new Counter('auth_cache_misses');
+export const authCacheHitRate = new Rate('auth_cache_hit_rate');
+export const authRequestDuration = new Trend('auth_request_duration', true);
+export const authColdRequestDuration = new Trend('auth_cold_request_duration', true);
+export const authWarmRequestDuration = new Trend('auth_warm_request_duration', true);
+export const tokenValidationDuration = new Trend('token_validation_duration', true);
+export const userLookupDuration = new Trend('user_lookup_duration', true);

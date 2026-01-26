@@ -1,16 +1,21 @@
 import { Injectable, OnModuleDestroy, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Session, SessionStore } from './interfaces/session.interface';
+import {
+  Session,
+  InternalSession,
+  SessionStore,
+} from './interfaces/session.interface';
 import { SessionConfig } from './interfaces/session-config.interface';
 import { SessionMessageDto, MessageRole } from './dto/session-message.dto';
 import { SessionInfoDto } from './dto/session-info.dto';
 import { SESSION_DEFAULTS } from './constants/session.constants';
+import { CircularBuffer } from './utils/circular-buffer';
 
 @Injectable()
 export class SessionService implements OnModuleDestroy {
   private readonly logger = new Logger(SessionService.name);
   private readonly store: SessionStore = {
-    sessions: new Map<string, Session>(),
+    sessions: new Map<string, InternalSession>(),
     expirationTimers: new Map<string, NodeJS.Timeout>(),
     disconnectTimers: new Map<string, NodeJS.Timeout>(),
   };
@@ -48,27 +53,63 @@ export class SessionService implements OnModuleDestroy {
     const existingSession = this.store.sessions.get(clientId);
     if (existingSession && existingSession.status === 'active') {
       this.logger.warn(`Session already exists for client: ${clientId}`);
-      return existingSession;
+      return this.toExternalSession(existingSession);
     }
 
     const now = new Date();
-    const session: Session = {
+    // Use CircularBuffer for O(1) message operations instead of O(n) Array.shift()
+    const internalSession: InternalSession = {
       id: clientId,
       createdAt: now,
       lastActivityAt: now,
       expiresAt: new Date(now.getTime() + this.config.ttlMs),
       status: 'active',
-      conversationHistory: [],
+      conversationBuffer: new CircularBuffer<SessionMessageDto>(
+        this.config.maxHistoryLength,
+      ),
     };
 
-    this.store.sessions.set(clientId, session);
+    this.store.sessions.set(clientId, internalSession);
     this.setExpirationTimer(clientId);
 
     this.logger.log(`Session created: ${clientId}`);
-    return session;
+    return this.toExternalSession(internalSession);
+  }
+
+  /**
+   * Convert internal session (with CircularBuffer) to external session (with array)
+   */
+  private toExternalSession(internal: InternalSession): Session {
+    return {
+      id: internal.id,
+      createdAt: internal.createdAt,
+      lastActivityAt: internal.lastActivityAt,
+      expiresAt: internal.expiresAt,
+      status: internal.status,
+      disconnectedAt: internal.disconnectedAt,
+      conversationHistory: internal.conversationBuffer.toArray(),
+      metadata: internal.metadata,
+    };
   }
 
   getSession(clientId: string): Session | null {
+    const internalSession = this.store.sessions.get(clientId);
+    if (!internalSession) {
+      return null;
+    }
+
+    if (this.isSessionExpired(internalSession)) {
+      this.destroySession(clientId);
+      return null;
+    }
+
+    return this.toExternalSession(internalSession);
+  }
+
+  /**
+   * Get internal session (for internal use only)
+   */
+  private getInternalSession(clientId: string): InternalSession | null {
     const session = this.store.sessions.get(clientId);
     if (!session) {
       return null;
@@ -129,7 +170,7 @@ export class SessionService implements OnModuleDestroy {
     this.setExpirationTimer(clientId);
 
     this.logger.log(`Session reconnected: ${clientId}`);
-    return session;
+    return this.toExternalSession(session);
   }
 
   hasSession(clientId: string): boolean {
@@ -156,18 +197,15 @@ export class SessionService implements OnModuleDestroy {
     role: MessageRole,
     content: string,
   ): SessionMessageDto | null {
-    const session = this.getSession(clientId);
+    const session = this.getInternalSession(clientId);
     if (!session || session.status !== 'active') {
       this.logger.warn(`Cannot add message: session not found for ${clientId}`);
       return null;
     }
 
     const message = new SessionMessageDto(role, content);
-    session.conversationHistory.push(message);
-
-    while (session.conversationHistory.length > this.config.maxHistoryLength) {
-      session.conversationHistory.shift();
-    }
+    // O(1) push with automatic oldest-entry eviction (no more O(n) Array.shift())
+    session.conversationBuffer.push(message);
 
     this.touchSession(clientId);
 
@@ -175,12 +213,12 @@ export class SessionService implements OnModuleDestroy {
   }
 
   getConversationHistory(clientId: string): SessionMessageDto[] {
-    const session = this.getSession(clientId);
-    return session?.conversationHistory ?? [];
+    const session = this.getInternalSession(clientId);
+    return session?.conversationBuffer.toArray() ?? [];
   }
 
   getSessionInfo(clientId: string): SessionInfoDto | null {
-    const session = this.getSession(clientId);
+    const session = this.getInternalSession(clientId);
     if (!session) {
       return null;
     }
@@ -191,7 +229,7 @@ export class SessionService implements OnModuleDestroy {
       session.createdAt,
       session.lastActivityAt,
       session.expiresAt,
-      session.conversationHistory.length,
+      session.conversationBuffer.length(),
       session.disconnectedAt,
     );
   }
@@ -241,7 +279,20 @@ export class SessionService implements OnModuleDestroy {
     return { ...this.config };
   }
 
-  private isSessionExpired(session: Session): boolean {
+  /**
+   * Force-expire a session (for testing purposes)
+   * Sets the session's expiration time to the past
+   */
+  forceExpireSession(clientId: string): boolean {
+    const session = this.store.sessions.get(clientId);
+    if (!session) {
+      return false;
+    }
+    session.expiresAt = new Date(Date.now() - 1000);
+    return true;
+  }
+
+  private isSessionExpired(session: InternalSession): boolean {
     return new Date() > session.expiresAt;
   }
 

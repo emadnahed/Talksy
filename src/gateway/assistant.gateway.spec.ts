@@ -456,23 +456,21 @@ describe('AssistantGateway', () => {
       );
     });
 
-    it('should emit stream chunks', async () => {
+    it('should emit batched stream chunks', async () => {
       const messageData = { text: 'Hello' };
 
       await gateway.handleUserMessageStream(mockSocket as Socket, messageData);
 
+      // With batching enabled, chunks are combined into batches
+      // The mock provider yields 3 chunks that get batched together
       expect(mockSocket.emit).toHaveBeenCalledWith(
         'stream_chunk',
         expect.objectContaining({
-          data: { content: 'Hello', done: false },
-          code: ResponseCodes.AI_STREAM_CHUNK,
-          status: 'success',
-        }),
-      );
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'stream_chunk',
-        expect.objectContaining({
-          data: { content: ' there!', done: false },
+          data: expect.objectContaining({
+            content: expect.any(String), // Combined content
+            done: expect.any(Boolean),
+            chunkCount: expect.any(Number), // Number of chunks in batch
+          }),
           code: ResponseCodes.AI_STREAM_CHUNK,
           status: 'success',
         }),

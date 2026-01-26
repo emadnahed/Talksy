@@ -44,6 +44,13 @@ export const configValidationSchema = Joi.object({
   JWT_REFRESH_EXPIRY: Joi.string().default('7d'),
   BCRYPT_ROUNDS: Joi.number().default(12),
 
+  // Auth cache configuration
+  AUTH_CACHE_ENABLED: Joi.boolean().default(true),
+  AUTH_CACHE_USER_TTL_MS: Joi.number().default(300000), // 5 minutes
+  AUTH_CACHE_USER_MAX_SIZE: Joi.number().default(1000),
+  AUTH_CACHE_TOKEN_TTL_MS: Joi.number().default(300000), // 5 minutes
+  AUTH_CACHE_TOKEN_MAX_SIZE: Joi.number().default(5000),
+
   // Rate limiting configuration
   RATE_LIMIT_ENABLED: Joi.boolean().default(true),
   RATE_LIMIT_WINDOW_MS: Joi.number().default(60000), // 1 minute
@@ -56,4 +63,10 @@ export const configValidationSchema = Joi.object({
   LOG_FORMAT: Joi.string().valid('json', 'text').default('json'),
   LOG_WS_EVENTS: Joi.boolean().default(true),
   LOG_HTTP_REQUESTS: Joi.boolean().default(true),
+  LOG_WS_SKIP_HIGH_FREQUENCY: Joi.boolean().default(true), // Skip stream_chunk etc.
+
+  // AI Response Cache configuration
+  AI_CACHE_ENABLED: Joi.boolean().default(true),
+  AI_CACHE_TTL_MS: Joi.number().default(3600000), // 1 hour
+  AI_CACHE_MAX_SIZE: Joi.number().default(500),
 });
