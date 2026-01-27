@@ -1,0 +1,402 @@
+# API Reference
+
+This section provides detailed information about the Talksy WebSocket API and HTTP endpoints.
+
+## WebSocket Events
+
+Talksy uses WebSockets for real-time communication. All events follow a request-response pattern.
+
+### Authentication
+
+All WebSocket connections require API key authentication:
+
+```javascript
+const socket = io('http://localhost:3000', {
+  auth: {
+    apiKey: 'your_api_key_here'
+  }
+});
+```
+
+### Client → Server Events
+
+#### `user_message`
+
+Send a message to the AI assistant.
+
+**Request:**
+```json
+{
+  "text": "Your message here"
+}
+```
+
+**Response:**
+- `assistant_response` event with the AI's response
+
+**Example:**
+```javascript
+socket.emit('user_message', { text: 'Hello, how can you help me?' });
+```
+
+#### `user_message_stream`
+
+Send a message and receive a streaming response from the AI assistant.
+
+**Request:**
+```json
+{
+  "text": "Your message here"
+}
+```
+
+**Responses:**
+- `stream_start` - Indicates the stream has started
+- `stream_chunk` - Contains a chunk of the response
+- `stream_end` - Indicates the stream has ended
+
+**Example:**
+```javascript
+socket.emit('user_message_stream', { text: 'Explain quantum computing' });
+```
+
+#### `get_history`
+
+Retrieve the conversation history for the current session.
+
+**Request:** No payload required
+
+**Response:**
+- `conversation_history` event with the message history
+
+**Example:**
+```javascript
+socket.emit('get_history');
+socket.on('conversation_history', (data) => {
+  console.log('Conversation history:', data.messages);
+});
+```
+
+#### `get_session_info`
+
+Get information about the current session.
+
+**Request:** No payload required
+
+**Response:**
+- `session_info` event with session details
+
+**Example:**
+```javascript
+socket.emit('get_session_info');
+socket.on('session_info', (info) => {
+  console.log('Session info:', info);
+});
+```
+
+#### `list_tools`
+
+List available tools that can be executed.
+
+**Request (optional):**
+```json
+{
+  "category": "string", // Optional: filter by category
+  "includeDeprecated": true // Optional: include deprecated tools
+}
+```
+
+**Response:**
+- `tools_list` event with available tools
+
+**Example:**
+```javascript
+socket.emit('list_tools');
+socket.on('tools_list', (data) => {
+  console.log('Available tools:', data.tools);
+});
+```
+
+#### `call_tool`
+
+Execute a specific tool with parameters.
+
+**Request:**
+```json
+{
+  "toolName": "string", // Required: name of the tool
+  "parameters": {}, // Required: parameters for the tool
+  "callId": "string" // Optional: ID for tracking
+}
+```
+
+**Response:**
+- `tool_result` event with the tool execution result
+
+**Example:**
+```javascript
+socket.emit('call_tool', {
+  toolName: 'weather_tool',
+  parameters: {
+    location: 'New York',
+    units: 'fahrenheit'
+  }
+});
+```
+
+#### `get_tool_info`
+
+Get detailed information about a specific tool.
+
+**Request:**
+```json
+{
+  "toolName": "string" // Required: name of the tool
+}
+```
+
+**Response:**
+- `tool_info` event with tool definition
+
+**Example:**
+```javascript
+socket.emit('get_tool_info', { toolName: 'weather_tool' });
+```
+
+### Server → Client Events
+
+#### `connected`
+
+Emitted when a client connects and a session is created or restored.
+
+**Payload:**
+```json
+{
+  "clientId": "string",
+  "sessionId": "string"
+}
+```
+
+#### `session_created`
+
+Emitted when a new session is created.
+
+**Payload:**
+```json
+{
+  "sessionId": "string",
+  "expiresAt": "string" // ISO date string
+}
+```
+
+#### `session_restored`
+
+Emitted when a disconnected session is restored.
+
+**Payload:**
+```json
+{
+  "sessionId": "string",
+  "expiresAt": "string", // ISO date string
+  "messageCount": "number"
+}
+```
+
+#### `assistant_response`
+
+Emitted when the AI assistant responds to a user message.
+
+**Payload:**
+```json
+{
+  "text": "string",
+  "timestamp": "number"
+}
+```
+
+#### `stream_start`
+
+Emitted when a streaming response starts.
+
+**Payload:**
+```json
+{
+  "timestamp": "number"
+}
+```
+
+#### `stream_chunk`
+
+Emitted with each chunk of a streaming response.
+
+**Payload:**
+```json
+{
+  "content": "string",
+  "done": "boolean"
+}
+```
+
+#### `stream_end`
+
+Emitted when a streaming response ends.
+
+**Payload:**
+```json
+{
+  "timestamp": "number",
+  "fullResponse": "string"
+}
+```
+
+#### `conversation_history`
+
+Emitted in response to `get_history` request.
+
+**Payload:**
+```json
+{
+  "messages": "array"
+}
+```
+
+#### `session_info`
+
+Emitted in response to `get_session_info` request.
+
+**Payload:**
+```json
+{
+  "id": "string",
+  "createdAt": "string", // ISO date string
+  "expiresAt": "string", // ISO date string
+  "messageCount": "number"
+}
+```
+
+#### `tools_list`
+
+Emitted in response to `list_tools` request.
+
+**Payload:**
+```json
+{
+  "tools": "array",
+  "count": "number"
+}
+```
+
+#### `tool_result`
+
+Emitted in response to `call_tool` request.
+
+**Payload:**
+```json
+{
+  "callId": "string",
+  "toolName": "string",
+  "result": {
+    "success": "boolean",
+    "data": "object",
+    "error": "object",
+    "executionTimeMs": "number"
+  },
+  "timestamp": "number"
+}
+```
+
+#### `tool_info`
+
+Emitted in response to `get_tool_info` request.
+
+**Payload:**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "parameters": "object",
+  "category": "string",
+  "version": "string",
+  "deprecated": "boolean"
+}
+```
+
+#### `error`
+
+Emitted when an error occurs.
+
+**Payload:**
+```json
+{
+  "message": "string",
+  "code": "string"
+}
+```
+
+## HTTP Endpoints
+
+### Health Checks
+
+#### `GET /health`
+
+Basic health check for the application.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2023-10-05T14:48:00.000Z"
+}
+```
+
+#### `GET /health/detailed`
+
+Detailed health check with memory, Redis, and session information.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2023-10-05T14:48:00.000Z",
+  "version": "1.0.0",
+  "environment": "production",
+  "uptime": 3600,
+  "checks": {
+    "memory": {
+      "status": "healthy",
+      "heapUsed": 45678901,
+      "heapTotal": 98765432,
+      "rss": 12345678,
+      "percentage": 46.2
+    },
+    "redis": {
+      "status": "healthy",
+      "latencyMs": 2.5,
+      "usingFallback": false
+    },
+    "sessions": {
+      "active": 15,
+      "total": 42
+    }
+  }
+}
+```
+
+## Rate Limiting
+
+Talksy includes built-in rate limiting to prevent abuse. The default rate limit is 100 requests per minute per IP address. This can be configured in the application settings.
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| INVALID_MESSAGE | The message format is invalid |
+| SESSION_NOT_FOUND | The session does not exist or has expired |
+| PROCESSING_ERROR | An error occurred while processing the message |
+| INVALID_CATEGORY | The specified category is invalid |
+| TOOL_LIST_ERROR | Failed to list tools |
+| INVALID_TOOL_CALL | The tool call format is invalid |
+| TOOL_EXECUTION_ERROR | Failed to execute the tool |
+| INVALID_REQUEST | The request format is invalid |
+| TOOL_NOT_FOUND | The specified tool does not exist |
+| TOOL_INFO_ERROR | Failed to get tool information |

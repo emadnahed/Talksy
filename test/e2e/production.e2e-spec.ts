@@ -1,14 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { io, Socket } from 'socket.io-client';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '@/app.module';
 import { SessionService } from '@/session/session.service';
+
+// WsResponse wrapper type that matches the standardized format
+interface WsResponse<T> {
+  code: string;
+  data: T;
+  status: 'success' | 'error';
+  description: string;
+  timestamp: number;
+}
 
 describe('Production Features (e2e)', () => {
   let app: INestApplication;
   let sessionService: SessionService;
-  const port = 3002;
+  const port = 3003;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -105,10 +114,13 @@ describe('Production Features (e2e)', () => {
         forceNew: true,
       });
 
-      clientSocket.on('session_created', (data: { sessionId: string }) => {
-        expect(data.sessionId).toBeDefined();
-        done();
-      });
+      clientSocket.on(
+        'session_created',
+        (response: WsResponse<{ sessionId: string }>) => {
+          expect(response.data.sessionId).toBeDefined();
+          done();
+        },
+      );
 
       clientSocket.on('connect_error', (err) => done(err));
     });
@@ -123,12 +135,15 @@ describe('Production Features (e2e)', () => {
         clientSocket.emit('user_message', { text: 'Hello' });
       });
 
-      clientSocket.on('assistant_response', (response: { text: string }) => {
-        // MockAI provider returns a greeting response for "Hello"
-        expect(response.text).toBeDefined();
-        expect(response.text.length).toBeGreaterThan(0);
-        done();
-      });
+      clientSocket.on(
+        'assistant_response',
+        (response: WsResponse<{ text: string }>) => {
+          // MockAI provider returns a greeting response for "Hello"
+          expect(response.data.text).toBeDefined();
+          expect(response.data.text.length).toBeGreaterThan(0);
+          done();
+        },
+      );
 
       clientSocket.on('connect_error', (err) => done(err));
       clientSocket.on('error', (err) => done(new Error(JSON.stringify(err))));

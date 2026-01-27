@@ -1,0 +1,19 @@
+Talksy Basic API Test Report - Sun Jan  4 22:57:23 IST 2026
+========================================
+Base URL: http://localhost:3000
+
+[INFO] Base URL: http://localhost:3000
+[INFO] Report will be saved to: timely-reports/basic_api_test_report_20260104_225723.txt
+[INFO] Application is responding. Starting tests...
+[PASS] Health Check - Status: 200, Time: 0.001674s
+[PASS] Detailed Health Check - Status: 200, Time: 0.002160s
+[PASS] Non-existent endpoint (should return 404) - Status: 404, Time: 0.002105s
+
+Test Summary:
+=============
+Total tests: 3
+Passed: 3
+Failed: 0
+[INFO] Tests completed. Summary:
+[INFO] Total: 3, Passed: 3, Failed: 0
+[INFO] Report saved to: timely-reports/basic_api_test_report_20260104_225723.txt

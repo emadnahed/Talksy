@@ -1,0 +1,190 @@
+# Sessions
+
+Session management is a core feature of Talksy that maintains conversation context and state between client interactions.
+
+## Overview
+
+Sessions in Talksy provide:
+
+- Conversation history persistence
+- Client identification
+- Message context for AI responses
+- Graceful disconnection handling
+- Automatic cleanup of expired sessions
+
+## Session Lifecycle
+
+### Session Creation
+
+A session is automatically created when a client connects to the WebSocket:
+
+1. Client connects to the server
+2. Server creates a new session with a unique ID
+3. Session is stored in the active session registry
+4. Client receives session information via `connected` and `session_created` events
+
+### Active Session
+
+While active, a session:
+
+- Maintains conversation history
+- Tracks message count
+- Updates timestamps
+- Processes incoming messages
+- Stores AI responses
+
+### Disconnection
+
+When a client disconnects:
+
+1. Session is marked as disconnected
+2. A grace period begins (default: 5 minutes)
+3. Session remains available for reconnection
+4. If client reconnects during grace period, session is restored
+
+### Expiration
+
+If a client doesn't reconnect during the grace period:
+
+1. Session expires after TTL (default: 15 minutes)
+2. Session data is cleaned up
+3. Memory is freed
+
+## Session Properties
+
+Each session contains:
+
+- **ID**: Unique identifier for the session
+- **Client ID**: Identifier for the connected client
+- **Created At**: Timestamp when session was created
+- **Expires At**: Timestamp when session will expire
+- **Conversation History**: Array of messages in the conversation
+- **Message Count**: Number of messages in the session
+
+## Session Management
+
+### Getting Session Information
+
+To retrieve information about the current session:
+
+```javascript
+socket.emit('get_session_info');
+socket.on('session_info', (info) => {
+  console.log('Session ID:', info.id);
+  console.log('Created:', info.createdAt);
+  console.log('Expires:', info.expiresAt);
+  console.log('Message Count:', info.messageCount);
+});
+```
+
+### Getting Conversation History
+
+To retrieve the conversation history:
+
+```javascript
+socket.emit('get_history');
+socket.on('conversation_history', (data) => {
+  console.log('Conversation history:', data.messages);
+});
+```
+
+## Session Configuration
+
+Session behavior can be configured through environment variables:
+
+- `SESSION_TTL_MS`: Time-to-live for sessions (default: 900000 ms = 15 minutes)
+- `SESSION_DISCONNECT_GRACE_MS`: Grace period for reconnection (default: 300000 ms = 5 minutes)
+- `SESSION_MAX_HISTORY_LENGTH`: Maximum number of messages to store (default: 100)
+- `SESSION_CLEANUP_INTERVAL_MS`: Interval for cleaning up expired sessions (default: 60000 ms = 1 minute)
+
+## Session Storage
+
+Talksy supports multiple storage backends:
+
+### In-Memory Storage (Default)
+
+- Fastest performance
+- Suitable for single-instance deployments
+- Sessions are lost when the server restarts
+
+### Redis Storage
+
+- Supports multi-instance deployments
+- Sessions persist across server restarts
+- Required for horizontal scaling
+- Configured through environment variables
+
+## Session Events
+
+The server emits session-related events:
+
+### `session_created`
+
+Emitted when a new session is created:
+
+```javascript
+socket.on('session_created', (data) => {
+  console.log('New session created:', data.sessionId);
+  console.log('Expires at:', data.expiresAt);
+});
+```
+
+### `session_restored`
+
+Emitted when a disconnected session is restored:
+
+```javascript
+socket.on('session_restored', (data) => {
+  console.log('Session restored:', data.sessionId);
+  console.log('Message count:', data.messageCount);
+});
+```
+
+## Best Practices
+
+### Session Management
+- Monitor active session count for capacity planning
+- Configure appropriate TTL values based on use case
+- Implement proper error handling for session operations
+- Consider session data size limits
+
+### Performance
+- Regularly clean up expired sessions
+- Use Redis for production deployments
+- Monitor memory usage with active sessions
+- Implement session data compression if needed
+
+### Security
+- Validate session IDs to prevent session hijacking
+- Implement appropriate session timeout values
+- Log session creation and destruction for monitoring
+- Consider IP-based session limits
+
+## Troubleshooting
+
+### Session Not Found Errors
+
+If you receive "Session not found" errors:
+
+1. Verify the client is properly connected
+2. Check that API key authentication is correct
+3. Ensure the session hasn't expired
+4. Confirm the client ID matches the session
+
+### High Memory Usage
+
+If experiencing high memory usage:
+
+1. Check active session count
+2. Verify cleanup interval configuration
+3. Consider reducing session TTL
+4. Monitor for session leaks
+
+## Integration with AI
+
+Sessions play a crucial role in AI interactions:
+
+- Conversation history provides context for AI responses
+- Session state maintains conversation continuity
+- Message history enables follow-up questions
+- Session metadata can influence AI behavior

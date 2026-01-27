@@ -1,0 +1,309 @@
+openapi: 3.0.3
+info:
+  title: Talksy Real-Time AI Assistant API
+  description: A production-grade, real-time AI assistant backend built with NestJS using WebSockets for low-latency communication.
+  version: 1.0.0
+  contact:
+    name: Talksy Support
+    email: support@talksy.ai
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: https://api.talksy.ai
+    description: Production server
+  - url: https://staging.talksy.ai
+    description: Staging server
+  - url: http://localhost:3000
+    description: Development server
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: WebSocket
+    description: Real-time communication via WebSocket
+  - name: Tools
+    description: Tool execution and management
+  - name: Sessions
+    description: Session management and history
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Basic health check
+      description: Returns a simple health status of the application
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                    description: Health status of the application
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2023-10-05T14:48:00.000Z"
+                    description: Timestamp of the health check
+        '500':
+          description: Application is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                    description: Error status
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2023-10-05T14:48:00.000Z"
+                    description: Timestamp of the health check
+  /health/detailed:
+    get:
+      tags:
+        - Health
+      summary: Detailed health check
+      description: Returns comprehensive health status including memory, Redis, and session information
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckDto'
+        '500':
+          description: Application is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckDto'
+components:
+  schemas:
+    HealthStatus:
+      type: string
+      enum:
+        - healthy
+        - degraded
+        - unhealthy
+      description: Health status of a component
+    MemoryCheck:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        heapUsed:
+          type: number
+          description: Amount of heap memory used in bytes
+          example: 45678901
+        heapTotal:
+          type: number
+          description: Total heap memory in bytes
+          example: 98765432
+        rss:
+          type: number
+          description: Resident Set Size (RSS) in bytes
+          example: 12345678
+        percentage:
+          type: number
+          description: Memory usage percentage
+          example: 46.2
+    RedisCheck:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        latencyMs:
+          type: number
+          description: Redis connection latency in milliseconds
+          example: 2.5
+        usingFallback:
+          type: boolean
+          description: Whether using in-memory fallback instead of Redis
+          example: true
+        message:
+          type: string
+          description: Additional message about Redis status
+          example: "Redis not configured, using in-memory storage"
+    SessionsCheck:
+      type: object
+      properties:
+        active:
+          type: number
+          description: Number of active sessions
+          example: 15
+        total:
+          type: number
+          description: Total number of sessions
+          example: 42
+    HealthCheckDto:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        timestamp:
+          type: string
+          format: date-time
+          example: "2023-10-05T14:48:00.000Z"
+        version:
+          type: string
+          example: "1.0.0"
+          description: Application version
+        environment:
+          type: string
+          example: "production"
+          description: Application environment
+        uptime:
+          type: number
+          description: Application uptime in seconds
+          example: 3600
+        checks:
+          type: object
+          properties:
+            memory:
+              $ref: '#/components/schemas/MemoryCheck'
+            redis:
+              $ref: '#/components/schemas/RedisCheck'
+            sessions:
+              $ref: '#/components/schemas/SessionsCheck'
+    UserMessageDto:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: The user message text
+          example: "What's the weather like today?"
+    AssistantResponseDto:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The AI assistant's response text
+          example: "The weather is sunny with a high of 75°F."
+        timestamp:
+          type: number
+          description: Unix timestamp of the response
+          example: 1696518480000
+    ToolCallRequestDto:
+      type: object
+      required:
+        - toolName
+        - parameters
+      properties:
+        toolName:
+          type: string
+          description: Name of the tool to call
+          example: "weather_tool"
+        parameters:
+          type: object
+          description: Parameters for the tool call
+          example:
+            location: "New York"
+            units: "fahrenheit"
+        callId:
+          type: string
+          description: Optional ID for tracking the tool call
+          example: "call_12345"
+    ToolResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the tool call was successful
+          example: true
+        data:
+          type: object
+          description: Result data from the tool call
+          example:
+            temperature: 75
+            condition: "sunny"
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: "TOOL_ERROR"
+            message:
+              type: string
+              description: Error message
+              example: "Tool execution failed"
+            details:
+              type: object
+              description: Additional error details
+        executionTimeMs:
+          type: number
+          description: Execution time in milliseconds
+          example: 125
+    ToolDefinitionDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the tool
+          example: "weather_tool"
+        description:
+          type: string
+          description: Description of the tool
+          example: "Retrieves current weather information for a location"
+        parameters:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "object"
+            properties:
+              type: object
+              description: Parameter definitions
+              example:
+                location:
+                  type: "string"
+                  description: "Location to get weather for"
+                units:
+                  type: "string"
+                  enum: ["celsius", "fahrenheit"]
+                  description: "Temperature units"
+            required:
+              type: array
+              items:
+                type: string
+              example: ["location"]
+        category:
+          type: string
+          description: Category of the tool
+          example: "information"
+        version:
+          type: string
+          description: Version of the tool
+          example: "1.0.0"
+        deprecated:
+          type: boolean
+          description: Whether the tool is deprecated
+          example: false
+    ToolListResponseDto:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolDefinitionDto'
+        count:
+          type: number
+          description: Number of tools in the list
+          example: 5
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+security:
+  - ApiKeyAuth: []

@@ -3,4 +3,5 @@ export interface SessionConfig {
   maxHistoryLength: number;
   cleanupIntervalMs: number;
   disconnectGraceMs: number;
+  maxSessions: number;
 }

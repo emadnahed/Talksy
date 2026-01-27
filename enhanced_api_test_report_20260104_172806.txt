@@ -1,0 +1,92 @@
+Talksy API Enhanced Test Report - Sun Jan  4 17:28:06 IST 2026
+========================================
+Base URL: http://localhost:3000
+
+[INFO] Starting comprehensive API tests for Talksy application...
+[INFO] Base URL: http://localhost:3000
+[INFO] Report will be saved to: enhanced_api_test_report_20260104_172806.txt
+[INFO] Application is responding. Starting comprehensive tests...
+[PASS] Health Check Status: 200, Time: .163899000s
+Health Response: {"status":"ok","timestamp":"2026-01-04T11:58:07.299Z"}
+[PASS] Detailed Health Check Status: 200, Time: .197957000s
+Detailed Health Response: {"status":"degraded","timestamp":"2026-01-04T11:58:07.727Z","version":"0.0.1","environment":"production","uptime":260,"checks":{"memory":{"status":"degraded","heapUsed":27752792,"heapTotal":30203904,"rss":88236032,"percentage":0.92},"redis":{"status":"healthy","latencyMs":0,"usingFallback":false},"sessions":{"active":0,"total":0}}}
+[INFO] Health Details:
+[INFO]   Overall Status: degraded
+degraded
+healthy
+[INFO]   Redis Status: healthy
+[INFO]   Redis Latency: 0ms
+[INFO]   Uptime: 260s
+[INFO] Running 10 requests to calculate response time statistics...
+[PERFORMANCE] Response Time Statistics:
+[PERFORMANCE]   Requests: 10
+[PERFORMANCE]   Average: .003678s
+[PERFORMANCE]   Median: 0.003585s
+[PERFORMANCE]   Min: 0.002829s
+[PERFORMANCE]   Max: 0.005129s
+[PERFORMANCE]   Fast (<0.1s): 10
+[PERFORMANCE]   Medium (0.1-0.5s): 0
+[PERFORMANCE]   Slow (>0.5s): 0
+[PERFORMANCE] Performance Rating: ⭐⭐⭐⭐⭐ Excellent
+Response Time Statistics:
+  Requests: 10
+  Average: .003678s
+  Median: 0.003585s
+  Min: 0.002829s
+  Max: 0.005129s
+  Fast (<0.1s): 10
+  Medium (0.1-0.5s): 0
+  Slow (>0.5s): 0
+[PASS] Non-existent endpoint (should return 404) Status: 404, Time: 0.003256s
+[PASS] POST to GET-only endpoint (should return 404 or 405) Status: 404, Time: 0.002508s
+[INFO] Running 20 concurrent requests to health endpoint...
+[PERFORMANCE] Completed 20 concurrent requests in .806849000s
+[PERFORMANCE] Throughput: 24.78 requests/sec
+Load Test Results:
+  Concurrent Requests: 20
+  Total Time: .806849000s
+  Throughput: 24.78 requests/sec
+[INFO] Running stability test for 30s (checking every 2s)...
+[PASS] Stability check 1 Status: 200
+[PASS] Stability check 2 Status: 200
+[PASS] Stability check 3 Status: 200
+[PASS] Stability check 4 Status: 200
+[PASS] Stability check 5 Status: 200
+[PASS] Stability check 6 Status: 200
+[PASS] Stability check 7 Status: 200
+[PASS] Stability check 8 Status: 200
+[PASS] Stability check 9 Status: 200
+[PASS] Stability check 10 Status: 200
+[PASS] Stability check 11 Status: 200
+[PASS] Stability check 12 Status: 200
+[PASS] Stability check 13 Status: 200
+[PASS] Stability check 14 Status: 200
+[PASS] Stability check 15 Status: 200
+[PERFORMANCE] Stability Results:
+[PERFORMANCE]   Successful checks: 15/15
+[PERFORMANCE]   Success rate: 100.00%
+[PERFORMANCE] Stability Rating: ⭐⭐⭐⭐⭐ Perfect
+Stability Test:
+  Duration: 30s
+  Successful checks: 15/15
+  Success rate: 100.00%
+[INFO] WebSocket endpoint available at: ws://localhost:3000
+[INFO] WebSocket functionality requires a dedicated WebSocket client for testing
+[INFO] The application supports real-time AI assistant features via WebSocket
+WebSocket Information:
+  Endpoint: ws://localhost:3000
+  Features: Real-time AI assistant, message streaming, tool execution
+[INFO] Tests completed. Summary:
+[INFO] Total: 19, Passed: 19, Failed: 0
+[INFO] Additional Info: 15, Performance Metrics: 16
+[PERFORMANCE] Overall Rating: ⭐⭐⭐⭐⭐ Excellent
+[PERFORMANCE] All tests passed successfully!
+
+Final Test Summary:
+===================
+Total tests: 19
+Passed: 19
+Failed: 0
+Success Rate: 100.00%
+[INFO] Complete report saved to: enhanced_api_test_report_20260104_172806.txt
+[INFO] Detailed logs saved to: enhanced_api_test_log_20260104_172806.log

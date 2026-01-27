@@ -4,6 +4,15 @@ import { io, Socket } from 'socket.io-client';
 import { AppModule } from '@/app.module';
 import { SessionService } from '@/session/session.service';
 
+// WsResponse wrapper type that matches the standardized format
+interface WsResponse<T> {
+  code: string;
+  data: T;
+  status: 'success' | 'error';
+  description: string;
+  timestamp: number;
+}
+
 describe('Session E2E', () => {
   let app: INestApplication;
   let clientSocket: Socket;
@@ -50,13 +59,14 @@ describe('Session E2E', () => {
 
       newSocket.on(
         'session_created',
-        (data: { sessionId: string; expiresAt: string }) => {
-          expect(data).toHaveProperty('sessionId');
-          expect(data).toHaveProperty('expiresAt');
-          expect(typeof data.sessionId).toBe('string');
-          expect(typeof data.expiresAt).toBe('string');
+        (response: WsResponse<{ sessionId: string; expiresAt: string }>) => {
+          expect(response).toHaveProperty('data');
+          expect(response.data).toHaveProperty('sessionId');
+          expect(response.data).toHaveProperty('expiresAt');
+          expect(typeof response.data.sessionId).toBe('string');
+          expect(typeof response.data.expiresAt).toBe('string');
 
-          const expiresAt = new Date(data.expiresAt);
+          const expiresAt = new Date(response.data.expiresAt);
           expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
 
           newSocket.disconnect();
@@ -73,10 +83,11 @@ describe('Session E2E', () => {
 
       newSocket.on(
         'connected',
-        (data: { clientId: string; sessionId: string }) => {
-          expect(data).toHaveProperty('clientId');
-          expect(data).toHaveProperty('sessionId');
-          expect(data.clientId).toBe(data.sessionId);
+        (response: WsResponse<{ clientId: string; sessionId: string }>) => {
+          expect(response).toHaveProperty('data');
+          expect(response.data).toHaveProperty('clientId');
+          expect(response.data).toHaveProperty('sessionId');
+          expect(response.data.clientId).toBe(response.data.sessionId);
 
           newSocket.disconnect();
           done();
@@ -99,16 +110,20 @@ describe('Session E2E', () => {
 
       clientSocket.on(
         'conversation_history',
-        (data: {
-          messages: Array<{
-            role: string;
-            content: string;
-            timestamp: number;
-          }>;
-        }) => {
-          expect(data.messages.length).toBe(messages.length * 2);
+        (
+          response: WsResponse<{
+            messages: Array<{
+              role: string;
+              content: string;
+              timestamp: number;
+            }>;
+          }>,
+        ) => {
+          expect(response.data.messages.length).toBe(messages.length * 2);
 
-          const userMessages = data.messages.filter((m) => m.role === 'user');
+          const userMessages = response.data.messages.filter(
+            (m) => m.role === 'user',
+          );
           expect(userMessages.length).toBe(messages.length);
 
           done();
@@ -123,8 +138,8 @@ describe('Session E2E', () => {
     it('should return empty history for new connection', (done) => {
       clientSocket.on(
         'conversation_history',
-        (data: { messages: unknown[] }) => {
-          expect(data.messages).toEqual([]);
+        (response: WsResponse<{ messages: unknown[] }>) => {
+          expect(response.data.messages).toEqual([]);
           done();
         },
       );
@@ -137,20 +152,22 @@ describe('Session E2E', () => {
     it('should return valid session info', (done) => {
       clientSocket.on(
         'session_info',
-        (data: {
-          sessionId: string;
-          status: string;
-          createdAt: string;
-          lastActivityAt: string;
-          expiresAt: string;
-          messageCount: number;
-        }) => {
-          expect(data.sessionId).toBeDefined();
-          expect(data.status).toBe('active');
-          expect(data.createdAt).toBeDefined();
-          expect(data.lastActivityAt).toBeDefined();
-          expect(data.expiresAt).toBeDefined();
-          expect(typeof data.messageCount).toBe('number');
+        (
+          response: WsResponse<{
+            sessionId: string;
+            status: string;
+            createdAt: string;
+            lastActivityAt: string;
+            expiresAt: string;
+            messageCount: number;
+          }>,
+        ) => {
+          expect(response.data.sessionId).toBeDefined();
+          expect(response.data.status).toBe('active');
+          expect(response.data.createdAt).toBeDefined();
+          expect(response.data.lastActivityAt).toBeDefined();
+          expect(response.data.expiresAt).toBeDefined();
+          expect(typeof response.data.messageCount).toBe('number');
 
           done();
         },
@@ -164,10 +181,13 @@ describe('Session E2E', () => {
         clientSocket.emit('get_session_info');
       });
 
-      clientSocket.on('session_info', (data: { messageCount: number }) => {
-        expect(data.messageCount).toBe(2);
-        done();
-      });
+      clientSocket.on(
+        'session_info',
+        (response: WsResponse<{ messageCount: number }>) => {
+          expect(response.data.messageCount).toBe(2);
+          done();
+        },
+      );
 
       clientSocket.emit('user_message', { text: 'Test message' });
     });
@@ -183,10 +203,13 @@ describe('Session E2E', () => {
 
       let sessionId: string;
 
-      testSocket.on('connected', (data: { sessionId: string }) => {
-        sessionId = data.sessionId;
-        testSocket.disconnect();
-      });
+      testSocket.on(
+        'connected',
+        (response: WsResponse<{ sessionId: string }>) => {
+          sessionId = response.data.sessionId;
+          testSocket.disconnect();
+        },
+      );
 
       testSocket.on('disconnect', () => {
         setTimeout(() => {
@@ -206,13 +229,18 @@ describe('Session E2E', () => {
         forceNew: true,
       });
 
-      testSocket.on('connected', (data: { sessionId: string }) => {
-        sessionService.destroySession(data.sessionId);
-        testSocket.emit('user_message', { text: 'Test' });
-      });
+      testSocket.on(
+        'connected',
+        (response: WsResponse<{ sessionId: string }>) => {
+          sessionService.destroySession(response.data.sessionId);
+          testSocket.emit('user_message', { text: 'Test' });
+        },
+      );
 
-      testSocket.on('error', (error: { code: string }) => {
-        expect(error.code).toBe('SESSION_NOT_FOUND');
+      testSocket.on('error', (error: WsResponse<null> | { code: string }) => {
+        // Handle both old and new error format
+        const code = 'data' in error ? error.code : error.code;
+        expect(code).toBe('MSG_SESSION_EXPIRED');
         testSocket.disconnect();
         done();
       });
@@ -245,18 +273,24 @@ describe('Session E2E', () => {
         }
       };
 
-      clientSocket.on('assistant_response', (data: { text: string }) => {
-        client1Messages.push(data.text);
-        client1Ready = true;
-        checkComplete();
-      });
+      clientSocket.on(
+        'assistant_response',
+        (response: WsResponse<{ text: string }>) => {
+          client1Messages.push(response.data.text);
+          client1Ready = true;
+          checkComplete();
+        },
+      );
 
       client2.on('connect', () => {
-        client2.on('assistant_response', (data: { text: string }) => {
-          client2Messages.push(data.text);
-          client2Ready = true;
-          checkComplete();
-        });
+        client2.on(
+          'assistant_response',
+          (response: WsResponse<{ text: string }>) => {
+            client2Messages.push(response.data.text);
+            client2Ready = true;
+            checkComplete();
+          },
+        );
 
         clientSocket.emit('user_message', { text: 'Hello from client 1' });
         client2.emit('user_message', { text: 'Hello from client 2' });
@@ -303,18 +337,21 @@ describe('Session E2E', () => {
 
         clientSocket.on(
           'conversation_history',
-          (data: { messages: unknown[] }) => {
-            client1History = data.messages;
+          (response: WsResponse<{ messages: unknown[] }>) => {
+            client1History = response.data.messages;
             client1HistoryReceived = true;
             checkComplete();
           },
         );
 
-        client2.on('conversation_history', (data: { messages: unknown[] }) => {
-          client2History = data.messages;
-          client2HistoryReceived = true;
-          checkComplete();
-        });
+        client2.on(
+          'conversation_history',
+          (response: WsResponse<{ messages: unknown[] }>) => {
+            client2History = response.data.messages;
+            client2HistoryReceived = true;
+            checkComplete();
+          },
+        );
 
         clientSocket.emit('user_message', { text: 'Client 1 message 1' });
         clientSocket.emit('user_message', { text: 'Client 1 message 2' });

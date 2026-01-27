@@ -1,0 +1,488 @@
+# Examples
+
+This section provides practical examples of how to use Talksy for various use cases.
+
+## Basic Chat Application
+
+Here's a complete example of a basic chat application using Talksy:
+
+```javascript
+import io from 'socket.io-client';
+
+class TalksyChatClient {
+  constructor(apiKey, serverUrl = 'http://localhost:3000') {
+    this.socket = io(serverUrl, {
+      auth: { apiKey }
+    });
+    
+    this.setupEventHandlers();
+  }
+  
+  setupEventHandlers() {
+    this.socket.on('connect', () => {
+      console.log('Connected to Talksy server');
+    });
+    
+    this.socket.on('connected', (data) => {
+      console.log('Session established:', data);
+    });
+    
+    this.socket.on('assistant_response', (response) => {
+      console.log('AI Response:', response.text);
+      this.displayResponse(response.text);
+    });
+    
+    this.socket.on('error', (error) => {
+      console.error('Error:', error.message);
+    });
+  }
+  
+  sendMessage(text) {
+    this.socket.emit('user_message', { text });
+  }
+  
+  displayResponse(text) {
+    // Implement your UI update logic here
+    console.log('Displaying response:', text);
+  }
+  
+  disconnect() {
+    this.socket.disconnect();
+  }
+}
+
+// Usage
+const client = new TalksyChatClient('your_api_key_here');
+client.sendMessage('Hello, how can you help me?');
+```
+
+## Streaming Response Example
+
+Example of using streaming responses for better user experience:
+
+```javascript
+import io from 'socket.io-client';
+
+class TalksyStreamingClient {
+  constructor(apiKey, serverUrl = 'http://localhost:3000') {
+    this.socket = io(serverUrl, {
+      auth: { apiKey }
+    });
+    
+    this.currentResponse = '';
+    this.setupEventHandlers();
+  }
+  
+  setupEventHandlers() {
+    this.socket.on('stream_start', (data) => {
+      console.log('Stream started');
+      this.currentResponse = '';
+      this.displayPartialResponse('');
+    });
+    
+    this.socket.on('stream_chunk', (chunk) => {
+      this.currentResponse += chunk.content;
+      this.displayPartialResponse(this.currentResponse);
+      
+      if (chunk.done) {
+        console.log('Stream completed');
+        this.onResponseComplete(this.currentResponse);
+      }
+    });
+    
+    this.socket.on('stream_end', (data) => {
+      console.log('Full response:', data.fullResponse);
+    });
+  }
+  
+  sendStreamingMessage(text) {
+    this.socket.emit('user_message_stream', { text });
+  }
+  
+  displayPartialResponse(text) {
+    // Update UI with partial response
+    console.log('Partial response:', text);
+  }
+  
+  onResponseComplete(response) {
+    // Handle completed response
+    console.log('Response complete:', response);
+  }
+}
+
+// Usage
+const client = new TalksyStreamingClient('your_api_key_here');
+client.sendStreamingMessage('Explain quantum computing in simple terms');
+```
+
+## Tool Usage Example
+
+Example of using tools to get real-time information:
+
+```javascript
+import io from 'socket.io-client';
+
+class TalksyToolClient {
+  constructor(apiKey, serverUrl = 'http://localhost:3000') {
+    this.socket = io(serverUrl, {
+      auth: { apiKey }
+    });
+    
+    this.setupEventHandlers();
+  }
+  
+  setupEventHandlers() {
+    this.socket.on('tools_list', (data) => {
+      console.log('Available tools:', data.tools);
+    });
+    
+    this.socket.on('tool_result', (result) => {
+      console.log('Tool result:', result);
+      this.handleToolResult(result);
+    });
+    
+    this.socket.on('tool_info', (info) => {
+      console.log('Tool info:', info);
+    });
+  }
+  
+  listTools() {
+    this.socket.emit('list_tools');
+  }
+  
+  useWeatherTool(location, units = 'fahrenheit') {
+    this.socket.emit('call_tool', {
+      toolName: 'weather_tool',
+      parameters: {
+        location,
+        units
+      }
+    });
+  }
+  
+  getToolInfo(toolName) {
+    this.socket.emit('get_tool_info', { toolName });
+  }
+  
+  handleToolResult(result) {
+    if (result.result.success) {
+      console.log('Tool executed successfully:', result.result.data);
+    } else {
+      console.error('Tool execution failed:', result.result.error);
+    }
+  }
+}
+
+// Usage
+const client = new TalksyToolClient('your_api_key_here');
+
+// List available tools
+client.listTools();
+
+// Get weather information
+client.useWeatherTool('New York', 'fahrenheit');
+
+// Get tool information
+client.getToolInfo('weather_tool');
+```
+
+## Session Management Example
+
+Example of managing sessions and conversation history:
+
+```javascript
+import io from 'socket.io-client';
+
+class TalksySessionClient {
+  constructor(apiKey, serverUrl = 'http://localhost:3000') {
+    this.socket = io(serverUrl, {
+      auth: { apiKey }
+    });
+    
+    this.sessionInfo = null;
+    this.conversationHistory = [];
+    
+    this.setupEventHandlers();
+  }
+  
+  setupEventHandlers() {
+    this.socket.on('session_created', (data) => {
+      console.log('Session created:', data);
+      this.sessionInfo = data;
+    });
+    
+    this.socket.on('session_restored', (data) => {
+      console.log('Session restored:', data);
+      this.sessionInfo = data;
+    });
+    
+    this.socket.on('session_info', (info) => {
+      this.sessionInfo = info;
+      console.log('Session info:', info);
+    });
+    
+    this.socket.on('conversation_history', (data) => {
+      this.conversationHistory = data.messages;
+      console.log('Conversation history:', data.messages);
+    });
+    
+    this.socket.on('assistant_response', (response) => {
+      // Add response to local history
+      this.conversationHistory.push({
+        role: 'assistant',
+        text: response.text,
+        timestamp: response.timestamp
+      });
+    });
+  }
+  
+  getSessionInfo() {
+    this.socket.emit('get_session_info');
+  }
+  
+  getConversationHistory() {
+    this.socket.emit('get_history');
+  }
+  
+  sendMessage(text) {
+    // Add user message to local history
+    this.conversationHistory.push({
+      role: 'user',
+      text,
+      timestamp: Date.now()
+    });
+    
+    this.socket.emit('user_message', { text });
+  }
+  
+  clearLocalHistory() {
+    this.conversationHistory = [];
+  }
+}
+
+// Usage
+const client = new TalksySessionClient('your_api_key_here');
+
+// Get session information
+client.getSessionInfo();
+
+// Get conversation history
+client.getConversationHistory();
+
+// Send a message
+client.sendMessage('What was my previous question?');
+```
+
+## Error Handling Example
+
+Example of comprehensive error handling:
+
+```javascript
+import io from 'socket.io-client';
+
+class TalksyErrorHandlingClient {
+  constructor(apiKey, serverUrl = 'http://localhost:3000') {
+    this.socket = io(serverUrl, {
+      auth: { apiKey }
+    });
+    
+    this.setupEventHandlers();
+  }
+  
+  setupEventHandlers() {
+    this.socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+    
+    this.socket.on('disconnect', (reason) => {
+      console.log('Disconnected from server:', reason);
+      this.handleDisconnection(reason);
+    });
+    
+    this.socket.on('error', (error) => {
+      console.error('Socket error:', error);
+      this.handleError(error);
+    });
+    
+    this.socket.on('assistant_response', (response) => {
+      console.log('Response received:', response.text);
+    });
+  }
+  
+  handleError(error) {
+    switch (error.code) {
+      case 'INVALID_MESSAGE':
+        console.error('Invalid message format');
+        break;
+      case 'SESSION_NOT_FOUND':
+        console.error('Session not found, reconnecting...');
+        this.reconnect();
+        break;
+      case 'PROCESSING_ERROR':
+        console.error('Processing error, please try again');
+        break;
+      default:
+        console.error('Unknown error:', error.message);
+    }
+  }
+  
+  handleDisconnection(reason) {
+    console.log('Attempting to reconnect...');
+    // Reconnection logic would go here
+  }
+  
+  reconnect() {
+    if (this.socket.disconnected) {
+      this.socket.connect();
+    }
+  }
+  
+  sendMessage(text) {
+    // Validate message before sending
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      console.error('Invalid message');
+      return;
+    }
+    
+    this.socket.emit('user_message', { text });
+  }
+}
+
+// Usage
+const client = new TalksyErrorHandlingClient('your_api_key_here');
+client.sendMessage('Hello');
+```
+
+## React Integration Example
+
+Example of integrating Talksy with a React application:
+
+```jsx
+import React, { useState, useEffect, useRef } from 'react';
+import io from 'socket.io-client';
+
+const TalksyChat = ({ apiKey }) => {
+  const [socket, setSocket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const messagesEndRef = useRef(null);
+  
+  useEffect(() => {
+    const newSocket = io('http://localhost:3000', {
+      auth: { apiKey }
+    });
+    
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      console.log('Connected to Talksy server');
+    });
+    
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log('Disconnected from server');
+    });
+    
+    newSocket.on('assistant_response', (response) => {
+      setIsLoading(false);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', text: response.text, timestamp: response.timestamp }
+      ]);
+    });
+    
+    newSocket.on('error', (error) => {
+      setIsLoading(false);
+      console.error('Error:', error.message);
+    });
+    
+    setSocket(newSocket);
+    
+    return () => {
+      newSocket.close();
+    };
+  }, [apiKey]);
+  
+  const sendMessage = () => {
+    if (!inputText.trim() || !socket || isLoading) return;
+    
+    const userMessage = {
+      role: 'user',
+      text: inputText,
+      timestamp: Date.now()
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    setIsLoading(true);
+    
+    socket.emit('user_message', { text: inputText });
+  };
+  
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+  
+  // Scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  return (
+    <div className="talksy-chat">
+      <div className="chat-header">
+        <div className={`status ${isConnected ? 'connected' : 'disconnected'}`}>
+          {isConnected ? 'Connected' : 'Disconnected'}
+        </div>
+      </div>
+      
+      <div className="chat-messages">
+        {messages.map((message, index) => (
+          <div 
+            key={index} 
+            className={`message ${message.role}`}
+          >
+            <div className="message-text">{message.text}</div>
+            <div className="message-timestamp">
+              {new Date(message.timestamp).toLocaleTimeString()}
+            </div>
+          </div>
+        ))}
+        
+        {isLoading && (
+          <div className="message assistant">
+            <div className="message-text">Thinking...</div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <div className="chat-input">
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Type your message..."
+          disabled={isLoading}
+        />
+        <button 
+          onClick={sendMessage} 
+          disabled={!inputText.trim() || isLoading}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default TalksyChat;
+```
+
+These examples demonstrate various ways to integrate and use Talksy in different scenarios, from basic chat applications to more complex integrations with React and comprehensive error handling.

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { StorageModule } from '@/storage/storage.module';
 import { StorageService } from '@/storage/storage.service';
+import { RedisModule } from '@/redis/redis.module';
 import { Session } from '@/session/interfaces/session.interface';
 import { MessageRole } from '@/session/dto/session-message.dto';
 
@@ -29,6 +30,7 @@ describe('StorageModule Integration', () => {
             }),
           ],
         }),
+        RedisModule,
         StorageModule,
       ],
     }).compile();

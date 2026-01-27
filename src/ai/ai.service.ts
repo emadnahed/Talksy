@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import {
   AIProvider,
   AICompletionOptions,
@@ -10,7 +11,20 @@ import { AIProviderType } from './interfaces/ai-config.interface';
 import { SessionMessageDto } from '../session/dto/session-message.dto';
 import { MockAIProvider } from './providers/mock-ai.provider';
 import { OpenAIProvider } from './providers/openai.provider';
+import { GroqProvider } from './providers/groq.provider';
 import { AI_DEFAULTS, AI_ERRORS } from './constants/ai.constants';
+import { LRUCache } from '../cache/lru-cache';
+
+interface AICacheConfig {
+  enabled: boolean;
+  ttlMs: number;
+  maxSize: number;
+}
+
+interface CachedAIResponse {
+  result: AICompletionResult;
+  cachedAt: number;
+}
 
 @Injectable()
 export class AIService implements OnModuleInit {
@@ -18,25 +32,83 @@ export class AIService implements OnModuleInit {
   private readonly providers: Map<string, AIProvider> = new Map();
   private activeProvider!: AIProvider;
   private readonly configuredProviderType: AIProviderType;
+  private readonly cacheConfig: AICacheConfig;
+  private responseCache!: LRUCache<CachedAIResponse>;
+
+  // Cache statistics
+  private cacheHits = 0;
+  private cacheMisses = 0;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly mockProvider: MockAIProvider,
     private readonly openaiProvider: OpenAIProvider,
+    private readonly groqProvider: GroqProvider,
   ) {
     this.configuredProviderType =
       (this.configService.get<string>('AI_PROVIDER') as AIProviderType) ??
       AI_DEFAULTS.PROVIDER;
+
+    // Initialize cache configuration
+    this.cacheConfig = {
+      enabled: this.configService.get<boolean>('AI_CACHE_ENABLED', true),
+      ttlMs: this.configService.get<number>('AI_CACHE_TTL_MS', 3600000), // 1 hour
+      maxSize: this.configService.get<number>('AI_CACHE_MAX_SIZE', 500),
+    };
   }
 
   onModuleInit(): void {
     this.registerProviders();
     this.selectActiveProvider();
+    this.initializeCache();
+  }
+
+  private initializeCache(): void {
+    if (!this.cacheConfig.enabled) {
+      this.logger.log('AI response caching is disabled');
+      this.responseCache = new LRUCache<CachedAIResponse>(1, 0);
+      return;
+    }
+
+    this.responseCache = new LRUCache<CachedAIResponse>(
+      this.cacheConfig.maxSize,
+      this.cacheConfig.ttlMs,
+    );
+
+    this.logger.log(
+      `AI response caching enabled - Max size: ${this.cacheConfig.maxSize}, TTL: ${this.cacheConfig.ttlMs}ms`,
+    );
+  }
+
+  /**
+   * Generate a cache key from messages
+   * Uses SHA256 hash of normalized message content
+   */
+  private generateCacheKey(
+    messages: SessionMessageDto[],
+    options?: AICompletionOptions,
+  ): string {
+    // Normalize messages to create consistent hash
+    const normalizedContent = messages
+      .map((m) => `${m.role}:${m.content.trim().toLowerCase()}`)
+      .join('|');
+
+    // Include relevant options that affect output
+    const optionsStr = options
+      ? JSON.stringify({
+          maxTokens: options.maxTokens,
+          temperature: options.temperature,
+        })
+      : '';
+
+    const contentToHash = `${this.activeProvider.name}:${normalizedContent}:${optionsStr}`;
+    return crypto.createHash('sha256').update(contentToHash).digest('hex');
   }
 
   private registerProviders(): void {
     this.providers.set(this.mockProvider.name, this.mockProvider);
     this.providers.set(this.openaiProvider.name, this.openaiProvider);
+    this.providers.set(this.groqProvider.name, this.groqProvider);
 
     this.logger.log(
       `Registered ${this.providers.size} AI providers: ${Array.from(this.providers.keys()).join(', ')}`,
@@ -91,6 +163,25 @@ export class AIService implements OnModuleInit {
       throw new Error(AI_ERRORS.PROVIDER_NOT_AVAILABLE);
     }
 
+    // Generate cache key once (avoid computing twice)
+    const cacheKey = this.cacheConfig.enabled
+      ? this.generateCacheKey(messages, options)
+      : null;
+
+    // Check cache first (if enabled)
+    if (cacheKey) {
+      const cached = this.responseCache.get(cacheKey);
+
+      if (cached) {
+        this.cacheHits++;
+        this.logger.debug(
+          `AI cache HIT: returning cached response (${cached.result.content.length} chars)`,
+        );
+        return cached.result;
+      }
+      this.cacheMisses++;
+    }
+
     this.logger.debug(
       `Generating completion with ${this.activeProvider.name} for ${messages.length} messages`,
     );
@@ -103,6 +194,16 @@ export class AIService implements OnModuleInit {
       this.logger.debug(
         `Completion generated: ${result.content.length} chars, ${result.usage?.totalTokens ?? 0} tokens`,
       );
+
+      // Cache the result (if enabled) - reuse the already computed cacheKey
+      if (cacheKey) {
+        this.responseCache.set(cacheKey, {
+          result,
+          cachedAt: Date.now(),
+        });
+        this.logger.debug('AI response cached');
+      }
+
       return result;
     } catch (error) {
       this.logger.error(
@@ -111,6 +212,38 @@ export class AIService implements OnModuleInit {
       );
       throw error;
     }
+  }
+
+  /**
+   * Get AI cache statistics
+   */
+  getCacheStats(): {
+    enabled: boolean;
+    hits: number;
+    misses: number;
+    hitRate: number;
+    size: number;
+    maxSize: number;
+  } {
+    const total = this.cacheHits + this.cacheMisses;
+    return {
+      enabled: this.cacheConfig.enabled,
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      hitRate: total > 0 ? (this.cacheHits / total) * 100 : 0,
+      size: this.responseCache.size(),
+      maxSize: this.cacheConfig.maxSize,
+    };
+  }
+
+  /**
+   * Clear the AI response cache
+   */
+  clearCache(): void {
+    this.responseCache.clear();
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+    this.logger.log('AI response cache cleared');
   }
 
   async *generateStream(

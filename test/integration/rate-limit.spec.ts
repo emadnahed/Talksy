@@ -12,6 +12,7 @@ describe('RateLimitModule Integration', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
+          ignoreEnvFile: true,
           load: [
             () => ({
               RATE_LIMIT_ENABLED: true,
@@ -203,6 +204,7 @@ describe('RateLimitModule Disabled', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
+          ignoreEnvFile: true,
           load: [
             () => ({
               RATE_LIMIT_ENABLED: false,

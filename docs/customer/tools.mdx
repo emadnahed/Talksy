@@ -1,0 +1,217 @@
+# Tools
+
+Talksy includes a powerful tool execution system that allows the AI assistant to interact with external services and perform complex operations.
+
+## Overview
+
+The tool system enables the AI to:
+
+- Call external APIs and services
+- Execute custom functions
+- Retrieve real-time information
+- Perform complex operations beyond simple text generation
+
+## Tool Architecture
+
+### Tool Registry
+
+The tool registry manages all available tools:
+
+- Discovers and registers tools
+- Maintains tool definitions
+- Handles tool execution
+- Provides tool listing and information
+
+### Tool Executor
+
+The tool executor handles:
+
+- Tool execution requests
+- Parameter validation
+- Error handling
+- Response formatting
+- Execution timing
+
+## Tool Categories
+
+Tools are organized into categories for better organization:
+
+### Information Tools
+- Retrieve real-time information
+- Examples: weather, news, stock prices
+- Focus on data retrieval
+
+### Utility Tools
+- Perform utility functions
+- Examples: calculator, unit converter, date/time
+- Focus on simple operations
+
+### Integration Tools
+- Integrate with external services
+- Examples: calendar, email, CRM
+- Focus on service integration
+
+## Creating Custom Tools
+
+You can create custom tools by implementing the tool interface:
+
+```typescript
+import { ITool, ToolDefinition } from '../interfaces/tool.interface';
+
+export class CustomTool implements ITool {
+  definition: ToolDefinition = {
+    name: 'custom_tool',
+    description: 'Description of what this tool does',
+    parameters: {
+      type: 'object',
+      properties: {
+        param1: {
+          type: 'string',
+          description: 'Description of param1'
+        },
+        param2: {
+          type: 'number',
+          description: 'Description of param2'
+        }
+      },
+      required: ['param1']
+    },
+    category: 'utility',
+    version: '1.0.0'
+  };
+
+  async execute(parameters: Record<string, unknown>): Promise<unknown> {
+    // Implement tool logic here
+    const { param1, param2 } = parameters;
+    
+    // Perform the tool's function
+    const result = await this.performOperation(param1, param2);
+    
+    return result;
+  }
+
+  private async performOperation(param1: unknown, param2: unknown): Promise<unknown> {
+    // Your tool implementation
+    return { success: true, data: 'result' };
+  }
+}
+```
+
+Then register your tool with the tool registry:
+
+```typescript
+// In your module or initialization code
+toolRegistry.registerTool(new CustomTool());
+```
+
+## Using Tools
+
+### Listing Available Tools
+
+To get a list of all available tools:
+
+```javascript
+socket.emit('list_tools');
+socket.on('tools_list', (data) => {
+  console.log('Available tools:', data.tools);
+});
+```
+
+### Calling a Tool
+
+To execute a tool:
+
+```javascript
+socket.emit('call_tool', {
+  toolName: 'weather_tool',
+  parameters: {
+    location: 'New York',
+    units: 'fahrenheit'
+  }
+});
+
+socket.on('tool_result', (result) => {
+  console.log('Tool result:', result);
+});
+```
+
+### Getting Tool Information
+
+To get detailed information about a specific tool:
+
+```javascript
+socket.emit('get_tool_info', { toolName: 'weather_tool' });
+socket.on('tool_info', (info) => {
+  console.log('Tool info:', info);
+});
+```
+
+## Built-in Tools
+
+Talksy comes with several built-in tools:
+
+### Weather Tool
+- **Name**: `weather_tool`
+- **Description**: Retrieves current weather information for a location
+- **Parameters**: 
+  - `location` (string, required): Location to get weather for
+  - `units` (string, optional): Temperature units ("celsius" or "fahrenheit")
+
+### Calculator Tool
+- **Name**: `calculator_tool`
+- **Description**: Performs basic mathematical calculations
+- **Parameters**:
+  - `expression` (string, required): Mathematical expression to evaluate
+
+### Time Tool
+- **Name**: `time_tool`
+- **Description**: Retrieves current time for a location
+- **Parameters**:
+  - `timezone` (string, optional): Timezone to get time for
+
+## Tool Execution Flow
+
+1. **Tool Call**: Client sends a `call_tool` event with tool name and parameters
+2. **Validation**: Parameters are validated against the tool's definition
+3. **Execution**: The tool's execute method is called with the provided parameters
+4. **Response**: Tool result is formatted and sent back to the client
+5. **Error Handling**: If an error occurs, it's caught and returned as an error response
+
+## Best Practices
+
+### Tool Design
+- Keep tools focused on a single purpose
+- Provide clear, descriptive names and descriptions
+- Validate input parameters thoroughly
+- Handle errors gracefully
+- Include appropriate error messages
+
+### Performance
+- Optimize tool execution time
+- Implement caching for frequently accessed data
+- Use async operations where appropriate
+- Consider rate limiting for external API calls
+
+### Security
+- Validate and sanitize all input parameters
+- Implement appropriate authentication for external services
+- Log tool usage for monitoring
+- Handle sensitive data appropriately
+
+## Error Handling
+
+Tools should handle errors appropriately:
+
+```typescript
+async execute(parameters: Record<string, unknown>): Promise<unknown> {
+  try {
+    // Tool logic here
+    return await this.performOperation(parameters);
+  } catch (error) {
+    // Return appropriate error response
+    throw new Error(`Tool execution failed: ${error.message}`);
+  }
+}
+```
+
+The tool executor will catch these errors and format them appropriately for the client.

@@ -1,31 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { RedisStorageAdapter } from './redis-storage.adapter';
+import { RedisPoolService } from '@/redis/redis-pool.service';
 import { Session } from '@/session/interfaces/session.interface';
-
-// Create mock client instance
-const mockRedisClient = {
-  connect: jest.fn().mockResolvedValue(undefined),
-  quit: jest.fn().mockResolvedValue(undefined),
-  get: jest.fn(),
-  set: jest.fn(),
-  del: jest.fn(),
-  exists: jest.fn(),
-  keys: jest.fn(),
-  ping: jest.fn(),
-  on: jest.fn(),
-};
-
-// Mock ioredis
-jest.mock('ioredis', () => {
-  return {
-    default: jest.fn().mockImplementation(() => mockRedisClient),
-  };
-});
 
 describe('RedisStorageAdapter', () => {
   let adapter: RedisStorageAdapter;
-  let mockConfigService: Partial<ConfigService>;
+  let mockRedisClient: any;
+  let mockRedisPoolService: any;
 
   const createMockSession = (id: string): Session => ({
     id,
@@ -37,35 +18,30 @@ describe('RedisStorageAdapter', () => {
   });
 
   beforeEach(async () => {
-    // Reset all mocks
-    jest.clearAllMocks();
-    mockRedisClient.connect.mockResolvedValue(undefined);
-    mockRedisClient.quit.mockResolvedValue(undefined);
-    mockRedisClient.get.mockReset();
-    mockRedisClient.set.mockReset();
-    mockRedisClient.del.mockReset();
-    mockRedisClient.exists.mockReset();
-    mockRedisClient.keys.mockReset();
-    mockRedisClient.ping.mockReset();
+    // Create mock Redis client
+    mockRedisClient = {
+      get: jest.fn(),
+      set: jest.fn(),
+      del: jest.fn(),
+      exists: jest.fn(),
+      keys: jest.fn(),
+      ping: jest.fn(),
+    };
 
-    mockConfigService = {
-      get: jest.fn((key: string, defaultValue?: unknown) => {
-        const config: Record<string, unknown> = {
-          REDIS_ENABLED: true,
-          REDIS_HOST: 'localhost',
-          REDIS_PORT: 6379,
-          REDIS_PASSWORD: '',
-          REDIS_DB: 0,
-          REDIS_KEY_PREFIX: 'talksy:',
-        };
-        return config[key] ?? defaultValue;
-      }),
+    // Create mock RedisPoolService
+    mockRedisPoolService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isAvailable: jest.fn().mockReturnValue(true),
+      getClient: jest.fn().mockReturnValue(mockRedisClient),
+      getKeyPrefix: jest.fn().mockReturnValue('talksy:'),
+      isHealthy: jest.fn().mockResolvedValue(true),
+      getLatency: jest.fn().mockResolvedValue(1),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RedisStorageAdapter,
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: RedisPoolService, useValue: mockRedisPoolService },
       ],
     }).compile();
 
@@ -77,62 +53,20 @@ describe('RedisStorageAdapter', () => {
   });
 
   describe('connect', () => {
-    it('should connect successfully when Redis is enabled', async () => {
-      const result = await adapter.connect();
-      expect(result).toBe(true);
-      expect(adapter.isConnectedStatus()).toBe(true);
-    });
-
-    it('should return false when Redis is disabled', async () => {
-      const disabledConfigService = {
-        get: jest.fn((key: string, defaultValue?: unknown) => {
-          if (key === 'REDIS_ENABLED') return false;
-          if (key === 'REDIS_KEY_PREFIX') return 'talksy:';
-          return defaultValue;
-        }),
-      };
-
-      const module = await Test.createTestingModule({
-        providers: [
-          RedisStorageAdapter,
-          { provide: ConfigService, useValue: disabledConfigService },
-        ],
-      }).compile();
-
-      const newAdapter = module.get<RedisStorageAdapter>(RedisStorageAdapter);
-      const result = await newAdapter.connect();
-      expect(result).toBe(false);
-    });
-
-    it('should return true if already connected', async () => {
-      await adapter.connect();
+    it('should return true when Redis pool is available', async () => {
+      mockRedisPoolService.isAvailable.mockReturnValue(true);
       const result = await adapter.connect();
       expect(result).toBe(true);
     });
 
-    it('should return false if connection throws error', async () => {
-      mockRedisClient.connect.mockRejectedValueOnce(
-        new Error('Connection refused'),
-      );
-
-      const module = await Test.createTestingModule({
-        providers: [
-          RedisStorageAdapter,
-          { provide: ConfigService, useValue: mockConfigService },
-        ],
-      }).compile();
-
-      const newAdapter = module.get<RedisStorageAdapter>(RedisStorageAdapter);
-      const result = await newAdapter.connect();
+    it('should return false when Redis pool is not available', async () => {
+      mockRedisPoolService.isAvailable.mockReturnValue(false);
+      const result = await adapter.connect();
       expect(result).toBe(false);
     });
   });
 
   describe('operations when connected', () => {
-    beforeEach(async () => {
-      await adapter.connect();
-    });
-
     describe('get', () => {
       it('should return null when key does not exist', async () => {
         mockRedisClient.get.mockResolvedValue(null);
@@ -321,39 +255,32 @@ describe('RedisStorageAdapter', () => {
     });
 
     describe('isHealthy', () => {
-      it('should return true when ping succeeds', async () => {
-        mockRedisClient.ping.mockResolvedValue('PONG');
+      it('should delegate to RedisPoolService.isHealthy', async () => {
+        mockRedisPoolService.isHealthy.mockResolvedValue(true);
         const result = await adapter.isHealthy();
         expect(result).toBe(true);
+        expect(mockRedisPoolService.isHealthy).toHaveBeenCalled();
       });
 
-      it('should return false when ping fails', async () => {
-        mockRedisClient.ping.mockRejectedValue(new Error('Connection error'));
+      it('should return false when pool reports unhealthy', async () => {
+        mockRedisPoolService.isHealthy.mockResolvedValue(false);
         const result = await adapter.isHealthy();
         expect(result).toBe(false);
       });
     });
 
     describe('getLatency', () => {
-      it('should return latency in ms when connected', async () => {
-        mockRedisClient.ping.mockResolvedValue('PONG');
+      it('should delegate to RedisPoolService.getLatency', async () => {
+        mockRedisPoolService.getLatency.mockResolvedValue(5);
         const result = await adapter.getLatency();
-        expect(result).toBeDefined();
-        expect(typeof result).toBe('number');
-        expect(result).toBeGreaterThanOrEqual(0);
+        expect(result).toBe(5);
+        expect(mockRedisPoolService.getLatency).toHaveBeenCalled();
       });
 
-      it('should return null when ping fails', async () => {
-        mockRedisClient.ping.mockRejectedValue(new Error('Connection error'));
+      it('should return null when pool returns null', async () => {
+        mockRedisPoolService.getLatency.mockResolvedValue(null);
         const result = await adapter.getLatency();
         expect(result).toBeNull();
-      });
-    });
-
-    describe('onModuleDestroy', () => {
-      it('should close connection and reset state', async () => {
-        await adapter.onModuleDestroy();
-        expect(mockRedisClient.quit).toHaveBeenCalled();
       });
     });
 
@@ -385,6 +312,10 @@ describe('RedisStorageAdapter', () => {
   });
 
   describe('operations when not connected', () => {
+    beforeEach(() => {
+      mockRedisPoolService.getClient.mockReturnValue(null);
+    });
+
     it('get should throw error when not connected', async () => {
       await expect(adapter.get('test')).rejects.toThrow('Redis not connected');
     });
@@ -416,16 +347,6 @@ describe('RedisStorageAdapter', () => {
     it('count should throw error when not connected', async () => {
       await expect(adapter.count()).rejects.toThrow('Redis not connected');
     });
-
-    it('isHealthy should return false when not connected', async () => {
-      const result = await adapter.isHealthy();
-      expect(result).toBe(false);
-    });
-
-    it('getLatency should return null when not connected', async () => {
-      const result = await adapter.getLatency();
-      expect(result).toBeNull();
-    });
   });
 
   describe('getType', () => {
@@ -435,13 +356,12 @@ describe('RedisStorageAdapter', () => {
   });
 
   describe('isConnectedStatus', () => {
-    it('should return false initially', () => {
-      expect(adapter.isConnectedStatus()).toBe(false);
-    });
-
-    it('should return true after successful connection', async () => {
-      await adapter.connect();
+    it('should delegate to RedisPoolService.isAvailable', () => {
+      mockRedisPoolService.isAvailable.mockReturnValue(true);
       expect(adapter.isConnectedStatus()).toBe(true);
+
+      mockRedisPoolService.isAvailable.mockReturnValue(false);
+      expect(adapter.isConnectedStatus()).toBe(false);
     });
   });
 });
