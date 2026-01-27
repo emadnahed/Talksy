@@ -4,16 +4,12 @@ import {
   RateLimitConfig,
   RateLimitResult,
 } from './interfaces/rate-limit-config.interface';
-
-interface ClientWindow {
-  timestamps: number[];
-  lastCleanup: number;
-}
+import { SlidingWindow } from './sliding-window';
 
 @Injectable()
 export class RateLimitService implements OnModuleDestroy {
   private readonly logger = new Logger(RateLimitService.name);
-  private readonly windows: Map<string, ClientWindow> = new Map();
+  private readonly windows: Map<string, SlidingWindow> = new Map();
   private readonly config: RateLimitConfig;
   private cleanupInterval: NodeJS.Timeout | null = null;
 
@@ -63,7 +59,7 @@ export class RateLimitService implements OnModuleDestroy {
 
   /**
    * Check if a request is allowed for the given client
-   * Uses sliding window algorithm
+   * Uses sliding window algorithm with O(1) amortized operations
    */
   checkLimit(clientId: string): RateLimitResult {
     if (!this.config.enabled) {
@@ -75,23 +71,18 @@ export class RateLimitService implements OnModuleDestroy {
     }
 
     const now = Date.now();
-    const windowStart = now - this.config.windowMs;
 
-    // Get or create client window
+    // Get or create client window (O(1) operations via SlidingWindow)
     let clientWindow = this.windows.get(clientId);
     if (!clientWindow) {
-      clientWindow = { timestamps: [], lastCleanup: now };
+      clientWindow = new SlidingWindow(this.config.maxRequests, this.config.windowMs);
       this.windows.set(clientId, clientWindow);
     }
 
-    // Remove timestamps outside the window
-    clientWindow.timestamps = clientWindow.timestamps.filter(
-      (ts) => ts > windowStart,
-    );
-
-    const currentCount = clientWindow.timestamps.length;
+    // Get count within window (O(1) amortized - lazy cleanup of expired entries)
+    const currentCount = clientWindow.getCount(now);
     const remaining = Math.max(0, this.config.maxRequests - currentCount);
-    const oldestTimestamp = clientWindow.timestamps[0] || now;
+    const oldestTimestamp = clientWindow.getOldest(now) ?? now;
     const resetAt = oldestTimestamp + this.config.windowMs;
 
     if (currentCount >= this.config.maxRequests) {
@@ -117,6 +108,7 @@ export class RateLimitService implements OnModuleDestroy {
   /**
    * Record a request for the given client
    * Should be called after checkLimit returns allowed=true
+   * O(1) operation
    */
   recordRequest(clientId: string): void {
     if (!this.config.enabled) {
@@ -127,13 +119,13 @@ export class RateLimitService implements OnModuleDestroy {
     let clientWindow = this.windows.get(clientId);
 
     if (!clientWindow) {
-      clientWindow = { timestamps: [], lastCleanup: now };
+      clientWindow = new SlidingWindow(this.config.maxRequests, this.config.windowMs);
       this.windows.set(clientId, clientWindow);
     }
 
-    clientWindow.timestamps.push(now);
+    clientWindow.record(now);
     this.logger.debug(
-      `Recorded request for client ${clientId}: ${clientWindow.timestamps.length}/${this.config.maxRequests}`,
+      `Recorded request for client ${clientId}: ${clientWindow.getCount(now)}/${this.config.maxRequests}`,
     );
   }
 
@@ -152,6 +144,7 @@ export class RateLimitService implements OnModuleDestroy {
 
   /**
    * Get the current request count for a client
+   * O(1) amortized operation
    */
   getRequestCount(clientId: string): number {
     const clientWindow = this.windows.get(clientId);
@@ -159,9 +152,7 @@ export class RateLimitService implements OnModuleDestroy {
       return 0;
     }
 
-    const now = Date.now();
-    const windowStart = now - this.config.windowMs;
-    return clientWindow.timestamps.filter((ts) => ts > windowStart).length;
+    return clientWindow.getCount(Date.now());
   }
 
   /**
@@ -182,23 +173,17 @@ export class RateLimitService implements OnModuleDestroy {
 
   /**
    * Cleanup old entries that are outside the window
+   * SlidingWindow handles internal cleanup lazily, this just removes empty windows
    */
   private cleanupOldEntries(): void {
     const now = Date.now();
-    const windowStart = now - this.config.windowMs;
     let cleanedCount = 0;
 
     for (const [clientId, window] of this.windows.entries()) {
-      // Remove old timestamps
-      const originalLength = window.timestamps.length;
-      window.timestamps = window.timestamps.filter((ts) => ts > windowStart);
-
-      // Remove client if no active timestamps
-      if (window.timestamps.length === 0) {
+      // Check if window is empty (all entries expired)
+      if (window.isEmpty(now)) {
         this.windows.delete(clientId);
         cleanedCount++;
-      } else if (window.timestamps.length < originalLength) {
-        window.lastCleanup = now;
       }
     }
 

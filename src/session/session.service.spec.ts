@@ -917,4 +917,209 @@ describe('SessionService', () => {
       expect(service.getDisconnectedSessionCount()).toBe(0);
     });
   });
+
+  describe('LRU eviction and max sessions', () => {
+    let limitedService: SessionService;
+
+    beforeEach(async () => {
+      const limitedConfigService = {
+        get: jest.fn().mockImplementation((key: string) => {
+          const values: Record<string, number> = {
+            SESSION_MAX_SESSIONS: 3, // Small limit for testing
+            SESSION_TTL_MS: 900000,
+            SESSION_MAX_HISTORY: 100,
+            SESSION_CLEANUP_INTERVAL_MS: 60000,
+            SESSION_DISCONNECT_GRACE_MS: 300000,
+          };
+          return values[key];
+        }),
+      };
+
+      const limitedModule = await Test.createTestingModule({
+        providers: [
+          SessionService,
+          { provide: ConfigService, useValue: limitedConfigService },
+        ],
+      }).compile();
+
+      limitedService = limitedModule.get<SessionService>(SessionService);
+    });
+
+    afterEach(() => {
+      limitedService.onModuleDestroy();
+    });
+
+    it('should include maxSessions in configuration', () => {
+      const config = limitedService.getConfig();
+      expect(config.maxSessions).toBe(3);
+    });
+
+    it('should evict LRU session when max sessions reached', () => {
+      // Create sessions up to max
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      expect(limitedService.getActiveSessionCount()).toBe(3);
+      expect(limitedService.hasSession('client-1')).toBe(true);
+
+      // Create one more - should evict client-1 (LRU)
+      limitedService.createSession('client-4');
+
+      expect(limitedService.getActiveSessionCount()).toBe(3);
+      expect(limitedService.hasSession('client-1')).toBe(false); // Evicted
+      expect(limitedService.hasSession('client-2')).toBe(true);
+      expect(limitedService.hasSession('client-3')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+    });
+
+    it('should evict multiple sessions when creating many new sessions', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      // Create two more sessions
+      limitedService.createSession('client-4');
+      limitedService.createSession('client-5');
+
+      expect(limitedService.getActiveSessionCount()).toBe(3);
+      expect(limitedService.hasSession('client-1')).toBe(false); // Evicted
+      expect(limitedService.hasSession('client-2')).toBe(false); // Evicted
+      expect(limitedService.hasSession('client-3')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+      expect(limitedService.hasSession('client-5')).toBe(true);
+    });
+
+    it('should update LRU order when touchSession is called', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      // Touch client-1 to make it most recently used
+      limitedService.touchSession('client-1');
+
+      // Create new session - should evict client-2 (now LRU)
+      limitedService.createSession('client-4');
+
+      expect(limitedService.hasSession('client-1')).toBe(true); // Was touched, not LRU
+      expect(limitedService.hasSession('client-2')).toBe(false); // Evicted as LRU
+      expect(limitedService.hasSession('client-3')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+    });
+
+    it('should update LRU order when adding messages', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      // Add message to client-1 to make it most recently used
+      limitedService.addMessage('client-1', MessageRole.USER, 'Hello');
+
+      // Create new session - should evict client-2 (now LRU)
+      limitedService.createSession('client-4');
+
+      expect(limitedService.hasSession('client-1')).toBe(true); // Had activity, not LRU
+      expect(limitedService.hasSession('client-2')).toBe(false); // Evicted as LRU
+      expect(limitedService.hasSession('client-3')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+    });
+
+    it('should preserve session data when updating LRU order', () => {
+      limitedService.createSession('client-1');
+      limitedService.addMessage('client-1', MessageRole.USER, 'Hello');
+      limitedService.addMessage('client-1', MessageRole.ASSISTANT, 'Hi there');
+
+      // Touch to update LRU order
+      limitedService.touchSession('client-1');
+
+      // Verify session data is preserved
+      const history = limitedService.getConversationHistory('client-1');
+      expect(history).toHaveLength(2);
+      expect(history[0].content).toBe('Hello');
+      expect(history[1].content).toBe('Hi there');
+    });
+
+    it('should update LRU order when createSession called for existing session', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      // Create session for existing client-1 (should update LRU order)
+      limitedService.createSession('client-1');
+
+      // Create new session - should evict client-2 (now LRU)
+      limitedService.createSession('client-4');
+
+      expect(limitedService.hasSession('client-1')).toBe(true); // Was re-created, not LRU
+      expect(limitedService.hasSession('client-2')).toBe(false); // Evicted as LRU
+      expect(limitedService.hasSession('client-3')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+    });
+
+    it('should not evict disconnected sessions based on LRU alone', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.markDisconnected('client-1');
+      limitedService.createSession('client-3');
+
+      // Active count should be 2, but total sessions include disconnected
+      expect(limitedService.getActiveSessionCount()).toBe(2);
+      expect(limitedService.hasDisconnectedSession('client-1')).toBe(true);
+
+      // Create new session
+      limitedService.createSession('client-4');
+
+      // client-1 was LRU and should be evicted (even though disconnected)
+      expect(limitedService.hasDisconnectedSession('client-1')).toBe(false);
+    });
+
+    it('should handle rapid session creation without errors', () => {
+      // Create more sessions than max in rapid succession
+      for (let i = 0; i < 10; i++) {
+        limitedService.createSession(`client-${i}`);
+      }
+
+      // Should only have maxSessions active
+      expect(limitedService.getActiveSessionCount()).toBe(3);
+
+      // Last 3 sessions should be active
+      expect(limitedService.hasSession('client-7')).toBe(true);
+      expect(limitedService.hasSession('client-8')).toBe(true);
+      expect(limitedService.hasSession('client-9')).toBe(true);
+    });
+
+    it('should correctly track LRU with mixed operations', () => {
+      limitedService.createSession('client-1');
+      limitedService.createSession('client-2');
+      limitedService.createSession('client-3');
+
+      // Mix of operations
+      limitedService.addMessage('client-2', MessageRole.USER, 'msg1'); // client-2 now most recent
+      limitedService.touchSession('client-1'); // client-1 now most recent
+
+      // LRU order: client-3 -> client-2 -> client-1
+      limitedService.createSession('client-4');
+
+      expect(limitedService.hasSession('client-3')).toBe(false); // LRU, evicted
+      expect(limitedService.hasSession('client-2')).toBe(true);
+      expect(limitedService.hasSession('client-1')).toBe(true);
+      expect(limitedService.hasSession('client-4')).toBe(true);
+    });
+  });
+
+  describe('maxSessions with default configuration', () => {
+    it('should have default maxSessions in configuration', () => {
+      const config = service.getConfig();
+      expect(config.maxSessions).toBe(SESSION_DEFAULTS.MAX_SESSIONS);
+    });
+
+    it('should handle large number of sessions up to default max', () => {
+      // Create several sessions (less than default max)
+      for (let i = 0; i < 100; i++) {
+        service.createSession(`client-${i}`);
+      }
+
+      expect(service.getActiveSessionCount()).toBe(100);
+    });
+  });
 });

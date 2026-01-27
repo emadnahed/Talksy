@@ -163,9 +163,13 @@ export class AIService implements OnModuleInit {
       throw new Error(AI_ERRORS.PROVIDER_NOT_AVAILABLE);
     }
 
+    // Generate cache key once (avoid computing twice)
+    const cacheKey = this.cacheConfig.enabled
+      ? this.generateCacheKey(messages, options)
+      : null;
+
     // Check cache first (if enabled)
-    if (this.cacheConfig.enabled) {
-      const cacheKey = this.generateCacheKey(messages, options);
+    if (cacheKey) {
       const cached = this.responseCache.get(cacheKey);
 
       if (cached) {
@@ -191,9 +195,8 @@ export class AIService implements OnModuleInit {
         `Completion generated: ${result.content.length} chars, ${result.usage?.totalTokens ?? 0} tokens`,
       );
 
-      // Cache the result (if enabled)
-      if (this.cacheConfig.enabled) {
-        const cacheKey = this.generateCacheKey(messages, options);
+      // Cache the result (if enabled) - reuse the already computed cacheKey
+      if (cacheKey) {
         this.responseCache.set(cacheKey, {
           result,
           cachedAt: Date.now(),

@@ -24,6 +24,7 @@ export const configValidationSchema = Joi.object({
   SESSION_MAX_HISTORY: Joi.number().default(100),
   SESSION_CLEANUP_INTERVAL_MS: Joi.number().default(60000), // 1 minute
   SESSION_DISCONNECT_GRACE_MS: Joi.number().default(300000), // 5 minutes
+  SESSION_MAX_SESSIONS: Joi.number().default(10000), // Max concurrent sessions
 
   // Redis configuration
   REDIS_ENABLED: Joi.boolean().default(false),
