@@ -1,93 +1,51 @@
 import {
   Injectable,
   Logger,
-  OnModuleInit,
-  OnModuleDestroy,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from './user.entity';
-import { IUser, ICreateUser, IUserPublic } from './interfaces/user.interface';
+import { IUser, ICreateUser } from './interfaces/user.interface';
 import { CacheService } from '@/cache/cache.service';
+import { RedisPoolService } from '@/redis/redis-pool.service';
 import { toCachedUser } from '@/cache/interfaces/cache.interface';
 
 @Injectable()
-export class UserService implements OnModuleInit, OnModuleDestroy {
+export class UserService {
   private readonly logger = new Logger(UserService.name);
-  private redisClient: Redis | null = null;
   private readonly users = new Map<string, IUser>();
   private readonly emailIndex = new Map<string, string>(); // email -> id
   private readonly keyPrefix: string;
   private readonly bcryptRounds: number;
-  private isRedisConnected = false;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly cacheService: CacheService,
+    private readonly redisPool: RedisPoolService,
   ) {
     this.keyPrefix = this.configService.get<string>(
       'REDIS_KEY_PREFIX',
       'talksy:',
     );
     this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
-  }
 
-  async onModuleInit(): Promise<void> {
-    await this.initializeRedis();
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    if (this.redisClient) {
-      await this.redisClient.quit();
-      this.redisClient = null;
-      this.isRedisConnected = false;
-    }
-  }
-
-  private async initializeRedis(): Promise<void> {
-    const redisEnabled =
-      this.configService.get<boolean | string>('REDIS_ENABLED', false) === true ||
-      this.configService.get<boolean | string>('REDIS_ENABLED', false) === 'true';
-
-    if (!redisEnabled) {
+    if (!this.redisPool.isEnabled()) {
       this.logger.warn(
         'Redis disabled, using in-memory user storage. ' +
         'WARNING: User data will NOT persist across restarts and will NOT be shared across instances. ' +
         'This mode is ONLY suitable for development/testing with a single instance.'
       );
-      return;
     }
+  }
 
-    try {
-      const host = this.configService.get<string>('REDIS_HOST', 'localhost');
-      const port = this.configService.get<number>('REDIS_PORT', 6379);
-      const password = this.configService.get<string>('REDIS_PASSWORD', '');
-      const db = this.configService.get<number>('REDIS_DB', 0);
-
-      this.redisClient = new Redis({
-        host,
-        port,
-        password: password || undefined,
-        db,
-        lazyConnect: true,
-        connectTimeout: 5000,
-        maxRetriesPerRequest: 3,
-      });
-
-      await this.redisClient.connect();
-      this.isRedisConnected = true;
-      this.logger.log('User service connected to Redis');
-    } catch (error) {
-      this.logger.warn(
-        `Failed to connect to Redis for user storage: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      this.redisClient = null;
-      this.isRedisConnected = false;
-    }
+  /**
+   * Check if Redis is available for use
+   */
+  private isRedisAvailable(): boolean {
+    return this.redisPool.isAvailable();
   }
 
   private getUserKey(id: string): string {
@@ -133,16 +91,16 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       updatedAt: now,
     };
 
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+    if (client) {
       try {
-        await this.redisClient.set(this.getUserKey(user.id), this.serializeUser(user));
-        await this.redisClient.set(this.getEmailIndexKey(email), user.id);
+        await client.set(this.getUserKey(user.id), this.serializeUser(user));
+        await client.set(this.getEmailIndexKey(email), user.id);
         this.logger.debug(`User ${user.id} created in Redis`);
       } catch (error) {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
         this.users.set(user.id, user);
         this.emailIndex.set(email, user.id);
       }
@@ -167,10 +125,11 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
 
     // Cache miss - fetch from storage
     let user: IUser | null = null;
+    const client = this.redisPool.getClient();
 
-    if (this.isRedisConnected && this.redisClient) {
+    if (client) {
       try {
-        const data = await this.redisClient.get(this.getUserKey(id));
+        const data = await client.get(this.getUserKey(id));
         if (data) {
           user = this.deserializeUser(data);
         }
@@ -178,12 +137,11 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
     // Fallback to in-memory if Redis not available or failed
-    if (!user && !this.isRedisConnected) {
+    if (!user && !this.isRedisAvailable()) {
       user = this.users.get(id) || null;
     }
 
@@ -207,16 +165,16 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Cache miss - fetch from storage
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+    if (client) {
       try {
-        const userId = await this.redisClient.get(this.getEmailIndexKey(normalizedEmail));
+        const userId = await client.get(this.getEmailIndexKey(normalizedEmail));
         if (!userId) return null;
         return this.findById(userId);
       } catch (error) {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
@@ -241,9 +199,10 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
       updatedAt: new Date(),
     };
 
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+    if (client) {
       try {
-        await this.redisClient.set(
+        await client.set(
           this.getUserKey(userId),
           this.serializeUser(updatedUser),
         );
@@ -251,7 +210,6 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
         this.users.set(userId, updatedUser);
       }
     } else {
@@ -273,16 +231,16 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
     this.cacheService.invalidateUser(userId, user.email);
     this.cacheService.invalidateAllTokensForUser(userId);
 
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+    if (client) {
       try {
-        await this.redisClient.del(this.getUserKey(userId));
-        await this.redisClient.del(this.getEmailIndexKey(user.email));
+        await client.del(this.getUserKey(userId));
+        await client.del(this.getEmailIndexKey(user.email));
         return true;
       } catch (error) {
         this.logger.warn(
           `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
@@ -292,7 +250,7 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
   }
 
   isUsingRedis(): boolean {
-    return this.isRedisConnected;
+    return this.isRedisAvailable();
   }
 
   // For testing purposes
@@ -300,11 +258,12 @@ export class UserService implements OnModuleInit, OnModuleDestroy {
     // Clear cache first
     this.cacheService.clearAll();
 
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+    if (client) {
       try {
-        const userKeys = await this.redisClient.keys(`${this.keyPrefix}user:*`);
+        const userKeys = await client.keys(`${this.keyPrefix}user:*`);
         if (userKeys.length > 0) {
-          await this.redisClient.del(...userKeys);
+          await client.del(...userKeys);
         }
       } catch (error) {
         this.logger.warn(`Failed to clear Redis users: ${error}`);

@@ -13,6 +13,7 @@ import { AIModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { CacheModule } from './cache/cache.module';
+import { RedisModule } from './redis/redis.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
@@ -23,6 +24,7 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
       validationSchema: configValidationSchema,
     }),
     EventEmitterModule.forRoot(),
+    RedisModule, // Shared Redis connection pool - must be early
     CacheModule,
     StorageModule,
     RateLimitModule,

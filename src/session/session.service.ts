@@ -46,6 +46,9 @@ export class SessionService implements OnModuleDestroy {
       disconnectGraceMs:
         this.configService?.get<number>('SESSION_DISCONNECT_GRACE_MS') ??
         SESSION_DEFAULTS.DISCONNECT_GRACE_MS,
+      maxSessions:
+        this.configService?.get<number>('SESSION_MAX_SESSIONS') ??
+        SESSION_DEFAULTS.MAX_SESSIONS,
     };
   }
 
@@ -53,7 +56,15 @@ export class SessionService implements OnModuleDestroy {
     const existingSession = this.store.sessions.get(clientId);
     if (existingSession && existingSession.status === 'active') {
       this.logger.warn(`Session already exists for client: ${clientId}`);
+      // Move to end to mark as recently used (LRU update)
+      this.store.sessions.delete(clientId);
+      this.store.sessions.set(clientId, existingSession);
       return this.toExternalSession(existingSession);
+    }
+
+    // Evict LRU session if at capacity (before creating new one)
+    if (this.store.sessions.size >= this.config.maxSessions) {
+      this.evictLRUSession();
     }
 
     const now = new Date();
@@ -74,6 +85,19 @@ export class SessionService implements OnModuleDestroy {
 
     this.logger.log(`Session created: ${clientId}`);
     return this.toExternalSession(internalSession);
+  }
+
+  /**
+   * Evict the least recently used session
+   * Map preserves insertion order, so first entry is LRU
+   */
+  private evictLRUSession(): void {
+    // Get the first (oldest/LRU) session
+    const firstKey = this.store.sessions.keys().next().value;
+    if (firstKey !== undefined) {
+      this.logger.warn(`Max sessions (${this.config.maxSessions}) reached, evicting LRU session: ${firstKey}`);
+      this.destroySession(firstKey);
+    }
   }
 
   /**
@@ -243,6 +267,10 @@ export class SessionService implements OnModuleDestroy {
     const now = new Date();
     session.lastActivityAt = now;
     session.expiresAt = new Date(now.getTime() + this.config.ttlMs);
+
+    // Update LRU order: delete and re-insert moves to end of Map
+    this.store.sessions.delete(clientId);
+    this.store.sessions.set(clientId, session);
 
     this.setExpirationTimer(clientId);
 

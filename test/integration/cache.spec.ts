@@ -7,6 +7,7 @@ import { AuthModule } from '@/auth/auth.module';
 import { AuthService } from '@/auth/auth.service';
 import { UserModule } from '@/user/user.module';
 import { UserService } from '@/user/user.service';
+import { RedisModule } from '@/redis/redis.module';
 import { toCachedUser } from '@/cache/interfaces/cache.interface';
 
 describe('CacheModule Integration', () => {
@@ -39,6 +40,7 @@ describe('CacheModule Integration', () => {
           secret: 'test-secret-key',
           signOptions: { expiresIn: '15m' },
         }),
+        RedisModule,
         CacheModule,
         UserModule,
         AuthModule,
@@ -50,8 +52,6 @@ describe('CacheModule Integration', () => {
     userService = module.get<UserService>(UserService);
 
     cacheService.onModuleInit();
-    await userService.onModuleInit();
-    await authService.onModuleInit();
   });
 
   afterEach(async () => {

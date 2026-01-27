@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { UserService } from '@/user/user.service';
 import { User } from '@/user/user.entity';
 import { CacheService } from '@/cache/cache.service';
+import { RedisPoolService } from '@/redis/redis-pool.service';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -19,6 +20,13 @@ describe('AuthService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+
+  const mockRedisPoolService = {
+    isEnabled: jest.fn().mockReturnValue(false),
+    isAvailable: jest.fn().mockReturnValue(false),
+    getClient: jest.fn().mockReturnValue(null),
+    getKeyPrefix: jest.fn().mockReturnValue('talksy:'),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -85,18 +93,20 @@ describe('AuthService', () => {
             clearAll: jest.fn(),
           },
         },
+        {
+          provide: RedisPoolService,
+          useValue: mockRedisPoolService,
+        },
       ],
     }).compile();
 
     authService = module.get<AuthService>(AuthService);
     userService = module.get<UserService>(UserService);
     jwtService = module.get<JwtService>(JwtService);
-    await authService.onModuleInit();
   });
 
   afterEach(async () => {
     await authService.clearAllTokens();
-    await authService.onModuleDestroy();
   });
 
   describe('register', () => {

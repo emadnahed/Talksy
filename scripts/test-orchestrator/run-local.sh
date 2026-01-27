@@ -27,6 +27,12 @@ cleanup() {
         wait "$API_PID" 2>/dev/null || true
     fi
 
+    # Kill any remaining processes on the API port
+    if lsof -ti :$API_PORT >/dev/null 2>&1; then
+        echo "Killing remaining processes on port $API_PORT..."
+        lsof -ti :$API_PORT | xargs kill -9 2>/dev/null || true
+    fi
+
     # Stop infrastructure
     bash "$SCRIPT_DIR/../infra/local-down.sh" 2>/dev/null || true
 
@@ -48,10 +54,27 @@ cd "$PROJECT_ROOT"
 echo -e "${YELLOW}► Step 0: Cleaning up existing processes...${NC}"
 pkill -f 'nest start' 2>/dev/null || true
 pkill -f 'node dist/main' 2>/dev/null || true
+
+# Kill any process using the API port
+if lsof -ti :$API_PORT >/dev/null 2>&1; then
+    echo "  Killing processes on port $API_PORT..."
+    lsof -ti :$API_PORT | xargs kill -9 2>/dev/null || true
+    sleep 1
+fi
+
 docker-compose -f docker/docker-compose.test.yml down 2>/dev/null || true
 docker-compose -f docker/docker-compose.dev.yml down 2>/dev/null || true
 rm -rf .pids .logs 2>/dev/null || true
-sleep 2
+
+# Wait for port to be released
+for i in {1..10}; do
+    if ! lsof -ti :$API_PORT >/dev/null 2>&1; then
+        break
+    fi
+    echo "  Waiting for port $API_PORT to be released..."
+    sleep 1
+done
+
 echo -e "${GREEN}  Existing processes cleaned up${NC}"
 echo ""
 
@@ -95,18 +118,41 @@ echo -e "${YELLOW}► Step 5: Running E2E Tests...${NC}"
 npm run test:e2e
 echo ""
 
-# Step 6: Run cURL API Tests
-echo -e "${YELLOW}► Step 6: Running cURL API Tests...${NC}"
+# Step 6: Run Latency Tests (Jest)
+echo -e "${YELLOW}► Step 6: Running Latency Tests...${NC}"
+npm run test:latency
+echo ""
+
+# Step 7: Run cURL API Tests
+echo -e "${YELLOW}► Step 7: Running cURL API Tests...${NC}"
 bash "$PROJECT_ROOT/scripts/test-api.sh" local
 echo ""
 
-# Step 7: Run K6 Smoke Test
-echo -e "${YELLOW}► Step 7: Running K6 Smoke Tests...${NC}"
+# Step 8: Run K6 Smoke Tests
+echo -e "${YELLOW}► Step 8: Running K6 Smoke Tests...${NC}"
 if command -v k6 &> /dev/null; then
     npm run test:k6:smoke
 else
-    echo -e "${YELLOW}k6 not installed, skipping load tests${NC}"
+    echo -e "${YELLOW}k6 not installed, skipping K6 smoke tests${NC}"
     echo "Install with: brew install k6 (macOS) or apt install k6 (Linux)"
+fi
+echo ""
+
+# Step 9: Run K6 Latency Tests
+echo -e "${YELLOW}► Step 9: Running K6 Latency Tests...${NC}"
+if command -v k6 &> /dev/null; then
+    npm run k6:latency:smoke
+else
+    echo -e "${YELLOW}k6 not installed, skipping K6 latency tests${NC}"
+fi
+echo ""
+
+# Step 10: Run K6 Cache Stress Tests
+echo -e "${YELLOW}► Step 10: Running K6 Cache Stress Tests...${NC}"
+if command -v k6 &> /dev/null; then
+    npm run k6:cache:smoke
+else
+    echo -e "${YELLOW}k6 not installed, skipping K6 cache tests${NC}"
 fi
 echo ""
 

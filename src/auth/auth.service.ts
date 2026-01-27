@@ -2,16 +2,14 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
-  OnModuleInit,
-  OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { UserService } from '@/user/user.service';
 import { User } from '@/user/user.entity';
 import { CacheService } from '@/cache/cache.service';
+import { RedisPoolService } from '@/redis/redis-pool.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { IJwtPayload, IRefreshTokenPayload } from './interfaces/jwt-payload.interface';
@@ -31,21 +29,20 @@ export interface AuthResponse extends AuthTokens {
 }
 
 @Injectable()
-export class AuthService implements OnModuleInit, OnModuleDestroy {
+export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private redisClient: Redis | null = null;
   private readonly refreshTokens = new Map<string, { userId: string; expiresAt: Date }>();
   private readonly keyPrefix: string;
   private readonly accessTokenExpirySec: number;
   private readonly refreshTokenExpirySec: number;
   private readonly refreshTokenExpiryMs: number;
-  private isRedisConnected = false;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly cacheService: CacheService,
+    private readonly redisPool: RedisPoolService,
   ) {
     this.keyPrefix = this.configService.get<string>('REDIS_KEY_PREFIX', 'talksy:');
     const accessExpiry = this.configService.get<string>('JWT_ACCESS_EXPIRY', '15m');
@@ -53,60 +50,21 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     this.accessTokenExpirySec = Math.floor(this.parseExpiryToMs(accessExpiry) / 1000);
     this.refreshTokenExpirySec = Math.floor(this.parseExpiryToMs(refreshExpiry) / 1000);
     this.refreshTokenExpiryMs = this.refreshTokenExpirySec * 1000;
-  }
 
-  async onModuleInit(): Promise<void> {
-    await this.initializeRedis();
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    if (this.redisClient) {
-      await this.redisClient.quit();
-      this.redisClient = null;
-      this.isRedisConnected = false;
-    }
-  }
-
-  private async initializeRedis(): Promise<void> {
-    const redisEnabled =
-      this.configService.get<boolean | string>('REDIS_ENABLED', false) === true ||
-      this.configService.get<boolean | string>('REDIS_ENABLED', false) === 'true';
-
-    if (!redisEnabled) {
+    if (!this.redisPool.isEnabled()) {
       this.logger.warn(
         'Redis disabled, using in-memory refresh token storage. ' +
         'WARNING: Refresh tokens will NOT persist across restarts and will NOT be shared across instances. ' +
         'This mode is ONLY suitable for development/testing with a single instance.'
       );
-      return;
     }
+  }
 
-    try {
-      const host = this.configService.get<string>('REDIS_HOST', 'localhost');
-      const port = this.configService.get<number>('REDIS_PORT', 6379);
-      const password = this.configService.get<string>('REDIS_PASSWORD', '');
-      const db = this.configService.get<number>('REDIS_DB', 0);
-
-      this.redisClient = new Redis({
-        host,
-        port,
-        password: password || undefined,
-        db,
-        lazyConnect: true,
-        connectTimeout: 5000,
-        maxRetriesPerRequest: 3,
-      });
-
-      await this.redisClient.connect();
-      this.isRedisConnected = true;
-      this.logger.log('Auth service connected to Redis for refresh tokens');
-    } catch (error) {
-      this.logger.warn(
-        `Failed to connect to Redis for auth: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      this.redisClient = null;
-      this.isRedisConnected = false;
-    }
+  /**
+   * Check if Redis is available for use
+   */
+  private isRedisAvailable(): boolean {
+    return this.redisPool.isAvailable();
   }
 
   private parseExpiryToMs(expiry: string): number {
@@ -291,10 +249,11 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
   private async storeRefreshToken(tokenId: string, userId: string): Promise<void> {
     const expiresAt = new Date(Date.now() + this.refreshTokenExpiryMs);
+    const client = this.redisPool.getClient();
 
-    if (this.isRedisConnected && this.redisClient) {
+    if (client) {
       try {
-        await this.redisClient.set(
+        await client.set(
           this.getRefreshTokenKey(tokenId),
           userId,
           'PX',
@@ -305,7 +264,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `Redis error storing refresh token, using in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
@@ -313,15 +271,16 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async isRefreshTokenValid(tokenId: string): Promise<boolean> {
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+
+    if (client) {
       try {
-        const result = await this.redisClient.exists(this.getRefreshTokenKey(tokenId));
+        const result = await client.exists(this.getRefreshTokenKey(tokenId));
         return result > 0;
       } catch (error) {
         this.logger.warn(
           `Redis error checking refresh token, using in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
@@ -337,15 +296,16 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async revokeRefreshToken(tokenId: string): Promise<void> {
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+
+    if (client) {
       try {
-        await this.redisClient.del(this.getRefreshTokenKey(tokenId));
+        await client.del(this.getRefreshTokenKey(tokenId));
         return;
       } catch (error) {
         this.logger.warn(
           `Redis error revoking refresh token, using in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        this.isRedisConnected = false;
       }
     }
 
@@ -354,11 +314,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
   // For testing purposes
   async clearAllTokens(): Promise<void> {
-    if (this.isRedisConnected && this.redisClient) {
+    const client = this.redisPool.getClient();
+
+    if (client) {
       try {
-        const keys = await this.redisClient.keys(`${this.keyPrefix}refresh:*`);
+        const keys = await client.keys(`${this.keyPrefix}refresh:*`);
         if (keys.length > 0) {
-          await this.redisClient.del(...keys);
+          await client.del(...keys);
         }
       } catch (error) {
         this.logger.warn(`Failed to clear Redis refresh tokens: ${error}`);

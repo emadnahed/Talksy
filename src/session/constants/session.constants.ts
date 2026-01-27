@@ -3,6 +3,7 @@ export const SESSION_DEFAULTS = {
   MAX_HISTORY_LENGTH: 100,
   CLEANUP_INTERVAL_MS: 60000, // 1 minute
   DISCONNECT_GRACE_MS: 300000, // 5 minutes
+  MAX_SESSIONS: 10000, // Maximum concurrent sessions before LRU eviction
 } as const;
 
 export const SESSION_EVENTS = {

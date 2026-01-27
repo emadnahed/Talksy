@@ -83,6 +83,24 @@ else
     echo -e "${YELLOW}  K6 not installed, skipping load tests${NC}"
 fi
 
+# Step 5: Run K6 latency tests against remote
+echo -e "${YELLOW}► Step 5: Running K6 latency tests...${NC}"
+if command -v k6 &> /dev/null; then
+    k6 run --env BASE_URL=$API_URL --env SMOKE=true test/k6/scenarios/all-endpoints-latency.js
+    echo -e "${GREEN}  K6 latency tests completed${NC}"
+else
+    echo -e "${YELLOW}  K6 not installed, skipping latency tests${NC}"
+fi
+
+# Step 6: Run K6 cache stress tests against remote
+echo -e "${YELLOW}► Step 6: Running K6 cache stress tests...${NC}"
+if command -v k6 &> /dev/null; then
+    k6 run --env BASE_URL=$API_URL --env SMOKE=true test/k6/scenarios/redis-cache-stress.js
+    echo -e "${GREEN}  K6 cache stress tests completed${NC}"
+else
+    echo -e "${YELLOW}  K6 not installed, skipping cache stress tests${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║           All Remote Tests Passed!                            ║${NC}"

@@ -3,11 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CacheService } from '@/cache/cache.service';
+import { RedisPoolService } from '@/redis/redis-pool.service';
 import * as bcrypt from 'bcrypt';
 
 describe('UserService', () => {
   let service: UserService;
   let configService: ConfigService;
+
+  const mockRedisPoolService = {
+    isEnabled: jest.fn().mockReturnValue(false),
+    isAvailable: jest.fn().mockReturnValue(false),
+    getClient: jest.fn().mockReturnValue(null),
+    getKeyPrefix: jest.fn().mockReturnValue('talksy:'),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -38,17 +46,19 @@ describe('UserService', () => {
             clearAll: jest.fn(),
           },
         },
+        {
+          provide: RedisPoolService,
+          useValue: mockRedisPoolService,
+        },
       ],
     }).compile();
 
     service = module.get<UserService>(UserService);
     configService = module.get<ConfigService>(ConfigService);
-    await service.onModuleInit();
   });
 
   afterEach(async () => {
     await service.clearAllUsers();
-    await service.onModuleDestroy();
   });
 
   describe('create', () => {
