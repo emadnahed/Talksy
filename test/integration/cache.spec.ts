@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { CacheModule } from '@/cache/cache.module';
 import { CacheService } from '@/cache/cache.service';
 import { AuthModule } from '@/auth/auth.module';
@@ -15,8 +17,19 @@ describe('CacheModule Integration', () => {
   let cacheService: CacheService;
   let authService: AuthService;
   let userService: UserService;
+  let mongoServer: MongoMemoryServer;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+  });
+
+  afterAll(async () => {
+    await mongoServer.stop();
+  });
 
   beforeEach(async () => {
+    const mongoUri = mongoServer.getUri();
+
     module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -36,6 +49,7 @@ describe('CacheModule Integration', () => {
             }),
           ],
         }),
+        MongooseModule.forRoot(mongoUri),
         JwtModule.register({
           secret: 'test-secret-key',
           signOptions: { expiresIn: '15m' },

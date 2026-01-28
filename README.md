@@ -22,12 +22,14 @@ Think of it as the **core engine behind ChatGPT-like assistants**, but simplifie
 
 - ✅ **Real-time Communication** — WebSockets with Socket.IO
 - ✅ **JWT Authentication** — Secure login with refresh token rotation
+- ✅ **Auth Caching Layer** — In-memory LRU cache for sub-millisecond auth lookups
 - ✅ **Multiple AI Providers** — OpenAI, Groq (free), Mock with auto-fallback
 - ✅ **Session Management** — Auto-expiring sessions with reconnection support
 - ✅ **Tool System** — Extensible, sandboxed tool execution
 - ✅ **Rate Limiting** — Sliding window abuse protection
 - ✅ **Horizontal Scaling** — Redis-backed for multi-instance deployment
 - ✅ **Production Logging** — Structured JSON with HTTP/WS middleware
+- ✅ **Comprehensive Testing** — 955+ tests with Jest, K6 load testing
 
 ---
 
@@ -83,6 +85,7 @@ Think of it as the **core engine behind ChatGPT-like assistants**, but simplifie
 ```
 AppModule
 ├── ConfigModule (global)     → Environment validation with Joi
+├── CacheModule (global)      → In-memory LRU caching for auth
 ├── AuthModule                → JWT authentication, user management
 ├── SessionModule (global)    → Conversation session lifecycle
 ├── AIModule (global)         → Provider orchestration (Mock/OpenAI/Groq)
@@ -304,103 +307,61 @@ ws://localhost:3000
 
 ## 🧪 Testing
 
-This project follows **strict Test-Driven Development (TDD)**.
+This project follows **strict Test-Driven Development (TDD)** with **955+ tests** achieving **90%+ coverage**.
 
-### Run All Tests
+### Quick Start
 ```bash
-npm test
+# Run full orchestrated test suite (recommended)
+npm run test:full:docker      # Handles infrastructure, runs all tests, cleans up
+
+# Or run tests individually
+npm run test:unit             # 737 unit tests
+npm run test:integration      # 132 integration tests
+npm run test:e2e              # 73 E2E tests
+npm run test:latency          # 13 latency/performance tests
 ```
 
-### Run Unit Tests
+### Test Categories
+
+| Category | Tests | Command | Description |
+|----------|-------|---------|-------------|
+| Unit | 737 | `npm run test:unit` | Fast, isolated tests |
+| Integration | 132 | `npm run test:integration` | Service interaction tests |
+| E2E | 73 | `npm run test:e2e` | Full application flow tests |
+| Latency | 13 | `npm run test:latency` | Performance threshold tests |
+| **Total Jest** | **955** | `npm test` | All Jest tests |
+
+### K6 Load Testing
 ```bash
-npm run test:unit
+npm run k6:latency:smoke      # Latency benchmarks (all endpoints)
+npm run k6:cache:smoke        # Cache stress tests
+npm run test:k6:smoke         # WebSocket smoke tests
+npm run k6:local              # Full K6 test suite
 ```
 
-### Run Integration Tests
+### Full Test Suite (Orchestrated)
 ```bash
-npm run test:integration
+# Local environment (requires local Redis)
+npm run test:full:local
+
+# Docker environment (recommended)
+npm run test:full:docker
+
+# Remote environments
+npm run test:full:vps
+npm run test:full:staging
+npm run test:full:production
 ```
 
-### Run E2E Tests
+### Coverage
 ```bash
-npm run test:e2e
+npm run test:coverage         # Generate coverage report
+npm run test:ci               # CI pipeline with coverage
 ```
 
-### Run Tests with Coverage
-```bash
-npm run test:cov
-```
+Coverage thresholds enforced: **90% branches, functions, lines, statements**
 
-### Run Comprehensive Test Suite
-```bash
-npm run test:comprehensive
-```
-
-### Run API Performance Tests
-```bash
-npm run test:api                    # Basic API tests
-npm run test:api:performance        # Performance tests
-npm run test:api:load               # Load tests
-npm run test:api:comprehensive      # Comprehensive API tests
-npm run test:api:comprehensive:v2   # Alternative comprehensive tests
-npm run test:api:performance:basic  # Basic performance tests
-npm run test:api:performance:enhanced # Enhanced performance tests
-```
-
-### Run All Tests Including API
-```bash
-npm run test:all
-```
-
-### Run Tests in Docker Environment
-```bash
-# Build and run tests in Docker
-npm run docker:test
-
-# Run all tests in Docker
-npm run docker:test:all
-
-# Run Docker integration tests
-npm run test:integration:docker
-
-# View Docker logs
-npm run docker:logs
-```
-
-### Run Specific Test Categories
-```bash
-# Run only unit tests
-npm run test:unit
-
-# Run only integration tests
-npm run test:integration
-
-# Run only end-to-end tests
-npm run test:e2e
-
-# Run tests with watch mode
-npm run test:watch
-```
-
-### Interactive Test Runner
-```bash
-# Use the interactive test runner
-npm run test:run help
-npm run test:run all
-npm run test:run api
-npm run test:run docker
-npm run test:run coverage
-```
-
-### Test Organization
-Tests are organized in the `test-scripts/` directory with the following structure:
-- `api/` - API-specific tests
-- `performance/` - Performance and benchmarking tests
-- `load/` - Load and stress tests
-- `integration/` - Integration and environment tests
-- `unit/` and `e2e/` - Handled by Jest framework
-
-For more details about the testing structure, see [test-scripts/README.md](./test-scripts/README.md).
+For detailed testing documentation, see [docs/TESTING.md](./docs/TESTING.md).
 
 ---
 
@@ -460,8 +421,15 @@ This project is built incrementally using TDD. Each phase is deployable.
 - [x] Concurrency control
 - [x] Tool categorization
 
-### Phase 6: Future Enhancements (Pending)
-- [ ] Redis caching layer for auth
+### Phase 6: Auth Caching Layer ✅
+- [x] In-memory LRU cache implementation
+- [x] Token validation caching (skip repeated JWT verification)
+- [x] User profile caching (avoid Redis lookups)
+- [x] Configurable TTL and max size
+- [x] Cache invalidation on logout
+- [x] Sub-millisecond cache hit latency
+
+### Phase 7: Future Enhancements (Pending)
 - [ ] Multi-agent orchestration
 - [ ] Persistent conversation history (database)
 - [ ] Voice AI integration (STT/TTS)
@@ -489,6 +457,7 @@ This project includes production-grade features:
 | Feature | Status | Details |
 |---------|--------|---------|
 | 🔐 Authentication | ✅ Done | JWT with refresh token rotation |
+| ⚡ Auth Caching | ✅ Done | In-memory LRU cache (~0.1ms lookups) |
 | 🚦 Rate Limiting | ✅ Done | Sliding window algorithm |
 | 🧠 Redis Storage | ✅ Done | Sessions, tokens, users |
 | 📡 Streaming | ✅ Done | Token-by-token AI responses |
@@ -496,6 +465,7 @@ This project includes production-grade features:
 | 🔄 Horizontal Scaling | ✅ Done | Socket.IO Redis adapter |
 | 🔧 Tool System | ✅ Done | Sandboxed execution |
 | ⚡ Fallback | ✅ Done | Auto-fallback for Redis & AI |
+| 🧪 Testing | ✅ Done | 955+ tests, K6 load testing |
 
 ---
 
@@ -503,7 +473,7 @@ This project includes production-grade features:
 
 | Feature | Priority | Status |
 |---------|----------|--------|
-| Redis caching for auth | High | Pending |
+| Auth caching layer | High | ✅ Done |
 | Database persistence | Medium | Pending |
 | Multi-agent orchestration | Medium | Pending |
 | Voice AI (STT + TTS) | Low | Pending |
@@ -523,7 +493,7 @@ This project demonstrates **production-grade patterns**:
 | **AI Integration** | Provider abstraction with automatic fallback |
 | **Real-time** | WebSocket with session management |
 | **Security** | Rate limiting, input validation, bcrypt hashing |
-| **Testing** | 695+ tests with 90%+ coverage |
+| **Testing** | 955+ tests with 90%+ coverage |
 
 **Perfect for:**
 - Backend engineering portfolios

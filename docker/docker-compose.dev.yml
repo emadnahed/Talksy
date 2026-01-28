@@ -1,9 +1,24 @@
-version: '3.8'
-
 # Development Docker Compose - for local Docker development
 # Usage: docker-compose -f docker/docker-compose.dev.yml up
 
 services:
+  mongodb:
+    image: mongo:7
+    container_name: talksy-dev-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-dev-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=talksy
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talksy-dev-network
+
   redis:
     image: redis:7-alpine
     container_name: talksy-dev-redis
@@ -30,20 +45,30 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      # MongoDB Configuration
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://mongodb:27017/talksy
+      # Redis Configuration
       - REDIS_ENABLED=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Session Configuration
       - SESSION_TTL_MS=3600000
       - SESSION_DISCONNECT_GRACE_MS=300000
+      # Rate Limiting
       - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_MAX_REQUESTS=100
       - RATE_LIMIT_WINDOW_MS=60000
+      # Auth Configuration
       - AUTH_ENABLED=false
       - AUTH_BYPASS_IN_DEV=true
+      # Logging
       - LOG_LEVEL=debug
       - LOG_HTTP_REQUESTS=true
       - LOG_WS_EVENTS=true
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -51,6 +76,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  mongodb-dev-data:
+    driver: local
   redis-dev-data:
     driver: local
 

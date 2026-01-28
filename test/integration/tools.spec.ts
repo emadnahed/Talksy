@@ -130,8 +130,12 @@ describe('ToolsModule Integration', () => {
     });
 
     it('should enforce timeout across modules', async () => {
+      // Use an AbortController pattern to clean up the pending timeout
+      let timeoutId: NodeJS.Timeout | null = null;
       const slowHandler = jest.fn().mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10000));
+        await new Promise((resolve) => {
+          timeoutId = setTimeout(resolve, 10000);
+        });
         return { result: 'too late' };
       });
 
@@ -144,6 +148,11 @@ describe('ToolsModule Integration', () => {
         { toolName: 'slow-tool', parameters: { input: 'test' } },
         createTestContext(),
       );
+
+      // Clean up the pending timeout to prevent open handles
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
 
       expect(result.result.success).toBe(false);
       expect(result.result.error?.code).toBe(ToolErrorCode.TIMEOUT);

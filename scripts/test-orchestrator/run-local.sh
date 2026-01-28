@@ -85,6 +85,7 @@ echo ""
 
 # Step 2: Start API server in background
 echo -e "${YELLOW}► Step 2: Starting API server...${NC}"
+MONGODB_ENABLED=true MONGODB_URI=mongodb://localhost:27017/talksy \
 npm run start:dev &
 API_PID=$!
 

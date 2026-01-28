@@ -26,13 +26,17 @@ export const configValidationSchema = Joi.object({
   SESSION_DISCONNECT_GRACE_MS: Joi.number().default(300000), // 5 minutes
   SESSION_MAX_SESSIONS: Joi.number().default(10000), // Max concurrent sessions
 
-  // Redis configuration
+  // Redis configuration (for tokens, sessions, caching)
   REDIS_ENABLED: Joi.boolean().default(false),
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
   REDIS_DB: Joi.number().default(0),
   REDIS_KEY_PREFIX: Joi.string().default('talksy:'),
+
+  // MongoDB configuration (primary database for user data)
+  MONGODB_ENABLED: Joi.boolean().default(true),
+  MONGODB_URI: Joi.string().default('mongodb://localhost:27017/talksy'),
 
   // Authentication configuration
   AUTH_ENABLED: Joi.boolean().default(true),

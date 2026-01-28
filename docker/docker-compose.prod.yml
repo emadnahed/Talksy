@@ -1,9 +1,29 @@
-version: '3.8'
-
 # Production Docker Compose - for production deployments
 # Usage: docker-compose -f docker/docker-compose.prod.yml up -d
 
 services:
+  mongodb:
+    image: mongo:7
+    container_name: talksy-prod-mongodb
+    ports:
+      - "127.0.0.1:27017:27017"  # Only bind to localhost
+    volumes:
+      - mongodb-prod-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=talksy
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - talksy-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   redis:
     image: redis:7-alpine
     container_name: talksy-prod-redis
@@ -37,10 +57,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # MongoDB Configuration
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://mongodb:27017/talksy
+      # Redis Configuration
       - REDIS_ENABLED=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -57,6 +83,8 @@ services:
         max-file: "3"
 
 volumes:
+  mongodb-prod-data:
+    driver: local
   redis-prod-data:
     driver: local
 

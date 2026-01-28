@@ -29,30 +29,36 @@ Talksy uses a tiered testing strategy to ensure code quality while maintaining f
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 1: Unit Tests (No Infrastructure Required)                │
 │  Fast, isolated tests that mock all external dependencies       │
-│  Command: npm run test:unit                                     │
+│  Command: npm run test:unit (737 tests)                         │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 2: Integration Tests (Optional Redis)                     │
 │  Tests service interactions with real module coordination       │
-│  Command: npm run test:integration                              │
+│  Command: npm run test:integration (132 tests)                  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 3: E2E Tests (Full Infrastructure Required)               │
 │  Complete WebSocket flow testing with all services running      │
-│  Command: npm run test:e2e                                      │
+│  Command: npm run test:e2e (73 tests)                           │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 4: cURL API Tests (Running API Required)                  │
+│  TIER 4: Latency Tests (Running API Required)                   │
+│  Performance threshold validation for all endpoints             │
+│  Command: npm run test:latency (13 tests)                       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  TIER 5: cURL API Tests (Running API Required)                  │
 │  Manual API testing with jq beautification                      │
 │  Command: npm run test:api                                      │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 5: K6 Load Tests (Running API Required)                   │
-│  Performance and load testing with k6                           │
+│  TIER 6: K6 Load Tests (Running API Required)                   │
+│  Performance, latency, and cache stress testing with k6         │
 │  Command: npm run k6:local                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -92,18 +98,19 @@ These commands handle infrastructure startup, run all tests, and cleanup automat
 
 | Command | Description |
 |---------|-------------|
-| `npm run test:unit` | Run 472+ unit tests (fast, isolated) |
+| `npm run test:unit` | Run 737 unit tests (fast, isolated) |
 
 ### Jest Tests
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all Jest tests |
+| `npm test` | Run all Jest tests (955 total) |
 | `npm run test:watch` | Watch mode for development |
 | `npm run test:cov` | Generate coverage report |
 | `npm run test:ci` | CI pipeline (with coverage + force exit) |
-| `npm run test:integration` | Integration tests only (88+ tests) |
-| `npm run test:e2e` | E2E tests (44+ tests) |
+| `npm run test:integration` | Integration tests only (132 tests) |
+| `npm run test:e2e` | E2E tests (73 tests) |
+| `npm run test:latency` | Latency/performance tests (13 tests) |
 | `npm run test:jest:local` | Unit + Integration + E2E combined |
 | `npm run test:comprehensive` | Unit + Integration + E2E combined |
 | `npm run test:coverage:check` | Run with 90% coverage threshold |
@@ -143,6 +150,15 @@ These commands handle infrastructure startup, run all tests, and cleanup automat
 | `npm run test:k6:ratelimit` | Rate limiting verification |
 | `npm run test:k6:all` | All K6 scenarios |
 | `npm run test:k6:smoke` | Quick smoke test |
+
+### K6 Latency & Cache Tests
+
+| Command | Description |
+|---------|-------------|
+| `npm run k6:latency` | All-endpoints latency benchmark |
+| `npm run k6:latency:smoke` | Quick latency smoke test |
+| `npm run k6:cache` | Redis cache stress test |
+| `npm run k6:cache:smoke` | Quick cache stress test |
 
 ### Docker Commands
 
@@ -448,10 +464,21 @@ Coverage report is generated in `coverage/` directory:
 
 | Category | Tests |
 |----------|-------|
-| Unit Tests | 472 |
-| Integration Tests | 88 |
-| E2E Tests | 44 |
-| **Total** | **604** |
+| Unit Tests | 737 |
+| Integration Tests | 132 |
+| E2E Tests | 73 |
+| Latency Tests | 13 |
+| **Total Jest** | **955** |
+
+### K6 Load Test Scenarios
+
+| Scenario | Description |
+|----------|-------------|
+| All-Endpoints Latency | Tests p95/p99 latency for all HTTP endpoints |
+| Cache Stress | Tests LRU cache under concurrent load |
+| WebSocket Connection | Connection/disconnection stress test |
+| Message Flow | Message throughput testing |
+| Streaming | Streaming response performance |
 
 ---
 

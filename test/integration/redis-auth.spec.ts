@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { RedisModule } from '@/redis/redis.module';
 import { RedisPoolService } from '@/redis/redis-pool.service';
 import { CacheModule } from '@/cache/cache.module';
@@ -20,6 +22,7 @@ describe('Redis Auth Caching Integration', () => {
   let authService: AuthService;
   let userService: UserService;
   let redisPoolService: RedisPoolService;
+  let mongoServer: MongoMemoryServer;
 
   // Test configuration with Redis enabled (if available) and caching enabled
   const testConfig = {
@@ -29,6 +32,8 @@ describe('Redis Auth Caching Integration', () => {
     REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
     REDIS_DB: 1, // Use separate DB for tests
     REDIS_KEY_PREFIX: 'test:auth:',
+    // MongoDB configuration
+    MONGODB_ENABLED: true,
     AUTH_CACHE_ENABLED: true,
     AUTH_CACHE_USER_TTL_MS: 5000,
     AUTH_CACHE_USER_MAX_SIZE: 100,
@@ -41,11 +46,18 @@ describe('Redis Auth Caching Integration', () => {
   };
 
   beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
+
     module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [() => testConfig],
+          load: [() => ({ ...testConfig, MONGODB_URI: mongoUri })],
+        }),
+        MongooseModule.forRoot(mongoUri, {
+          serverSelectionTimeoutMS: 5000,
+          connectTimeoutMS: 10000,
         }),
         JwtModule.register({
           secret: testConfig.JWT_SECRET,
@@ -73,6 +85,7 @@ describe('Redis Auth Caching Integration', () => {
     await userService.clearAllUsers();
     await authService.clearAllTokens();
     await module.close();
+    await mongoServer.stop();
   });
 
   beforeEach(async () => {
@@ -500,8 +513,12 @@ describe('Redis Auth Caching Integration', () => {
     let disabledModule: TestingModule;
     let disabledCacheService: CacheService;
     let disabledUserService: UserService;
+    let disabledMongoServer: MongoMemoryServer;
 
     beforeAll(async () => {
+      disabledMongoServer = await MongoMemoryServer.create();
+      const disabledMongoUri = disabledMongoServer.getUri();
+
       disabledModule = await Test.createTestingModule({
         imports: [
           ConfigModule.forRoot({
@@ -510,8 +527,13 @@ describe('Redis Auth Caching Integration', () => {
               () => ({
                 ...testConfig,
                 AUTH_CACHE_ENABLED: false,
+                MONGODB_URI: disabledMongoUri,
               }),
             ],
+          }),
+          MongooseModule.forRoot(disabledMongoUri, {
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 10000,
           }),
           JwtModule.register({
             secret: testConfig.JWT_SECRET,
@@ -533,6 +555,7 @@ describe('Redis Auth Caching Integration', () => {
     afterAll(async () => {
       await disabledUserService.clearAllUsers();
       await disabledModule.close();
+      await disabledMongoServer.stop();
     });
 
     it('should report disabled status', () => {
