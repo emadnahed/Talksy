@@ -29,30 +29,36 @@ Talksy uses a tiered testing strategy to ensure code quality while maintaining f
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 1: Unit Tests (No Infrastructure Required)                │
 │  Fast, isolated tests that mock all external dependencies       │
-│  Command: npm run test:unit                                     │
+│  Command: npm run test:unit (776 tests)                         │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 2: Integration Tests (Optional Redis)                     │
+│  TIER 2: Integration Tests (MongoDB Memory Server)              │
 │  Tests service interactions with real module coordination       │
-│  Command: npm run test:integration                              │
+│  Command: npm run test:integration (173 tests)                  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 3: E2E Tests (Full Infrastructure Required)               │
 │  Complete WebSocket flow testing with all services running      │
-│  Command: npm run test:e2e                                      │
+│  Command: npm run test:e2e (73 tests)                           │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 4: cURL API Tests (Running API Required)                  │
+│  TIER 4: Latency Tests (Running API Required)                   │
+│  Performance threshold validation for all endpoints             │
+│  Command: npm run test:latency (13 tests)                       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  TIER 5: cURL API Tests (Running API Required)                  │
 │  Manual API testing with jq beautification                      │
 │  Command: npm run test:api                                      │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 5: K6 Load Tests (Running API Required)                   │
-│  Performance and load testing with k6                           │
+│  TIER 6: K6 Load Tests (Running API Required)                   │
+│  Performance, latency, and cache stress testing with k6         │
 │  Command: npm run k6:local                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -92,18 +98,19 @@ These commands handle infrastructure startup, run all tests, and cleanup automat
 
 | Command | Description |
 |---------|-------------|
-| `npm run test:unit` | Run 472+ unit tests (fast, isolated) |
+| `npm run test:unit` | Run 776 unit tests (fast, isolated) |
 
 ### Jest Tests
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all Jest tests |
+| `npm test` | Run all Jest tests (1,035 total) |
 | `npm run test:watch` | Watch mode for development |
 | `npm run test:cov` | Generate coverage report |
 | `npm run test:ci` | CI pipeline (with coverage + force exit) |
-| `npm run test:integration` | Integration tests only (88+ tests) |
-| `npm run test:e2e` | E2E tests (44+ tests) |
+| `npm run test:integration` | Integration tests only (173 tests) |
+| `npm run test:e2e` | E2E tests (73 tests) |
+| `npm run test:latency` | Latency/performance tests (13 tests) |
 | `npm run test:jest:local` | Unit + Integration + E2E combined |
 | `npm run test:comprehensive` | Unit + Integration + E2E combined |
 | `npm run test:coverage:check` | Run with 90% coverage threshold |
@@ -143,6 +150,15 @@ These commands handle infrastructure startup, run all tests, and cleanup automat
 | `npm run test:k6:ratelimit` | Rate limiting verification |
 | `npm run test:k6:all` | All K6 scenarios |
 | `npm run test:k6:smoke` | Quick smoke test |
+
+### K6 Latency & Cache Tests
+
+| Command | Description |
+|---------|-------------|
+| `npm run k6:latency` | All-endpoints latency benchmark |
+| `npm run k6:latency:smoke` | Quick latency smoke test |
+| `npm run k6:cache` | Redis cache stress test |
+| `npm run k6:cache:smoke` | Quick cache stress test |
 
 ### Docker Commands
 
@@ -323,11 +339,22 @@ test/
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `NODE_ENV` | `development` | Environment mode |
+| `MONGODB_ENABLED` | `true` | Enable MongoDB (uses memory server in tests) |
 | `REDIS_ENABLED` | `false` | Enable Redis adapter |
 | `REDIS_HOST` | `localhost` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |
 | `AUTH_ENABLED` | `false` | Enable API key auth |
 | `RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
+| `BCRYPT_ROUNDS` | `4` (test) | bcrypt hashing rounds (use 12 in prod) |
+
+### Test Environment Setup
+
+Tests automatically configure the following via `test/jest.setup.ts`:
+- `BCRYPT_ROUNDS=4` for faster bcrypt hashing
+- `NODE_ENV=test` for test mode
+- 30 second default timeout for async operations
+
+Integration tests use `mongodb-memory-server` for isolated database testing.
 
 ---
 
@@ -448,10 +475,21 @@ Coverage report is generated in `coverage/` directory:
 
 | Category | Tests |
 |----------|-------|
-| Unit Tests | 472 |
-| Integration Tests | 88 |
-| E2E Tests | 44 |
-| **Total** | **604** |
+| Unit Tests | 776 |
+| Integration Tests | 173 |
+| E2E Tests | 73 |
+| Latency Tests | 13 |
+| **Total Jest** | **1,035** |
+
+### K6 Load Test Scenarios
+
+| Scenario | Description |
+|----------|-------------|
+| All-Endpoints Latency | Tests p95/p99 latency for all HTTP endpoints |
+| Cache Stress | Tests LRU cache under concurrent load |
+| WebSocket Connection | Connection/disconnection stress test |
+| Message Flow | Message throughput testing |
+| Streaming | Streaming response performance |
 
 ---
 

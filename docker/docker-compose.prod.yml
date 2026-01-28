@@ -1,9 +1,31 @@
-version: '3.8'
-
 # Production Docker Compose - for production deployments
 # Usage: docker-compose -f docker/docker-compose.prod.yml up -d
 
 services:
+  mongodb:
+    image: mongo:7
+    container_name: talksy-prod-mongodb
+    ports:
+      - "127.0.0.1:27017:27017"  # Only bind to localhost
+    volumes:
+      - mongodb-prod-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=talksy
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required in production}
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "${MONGO_ROOT_USER:-admin}", "-p", "${MONGO_ROOT_PASSWORD}", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - talksy-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   redis:
     image: redis:7-alpine
     container_name: talksy-prod-redis
@@ -11,9 +33,9 @@ services:
       - "127.0.0.1:6379:6379"  # Only bind to localhost
     volumes:
       - redis-prod-data:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,10 +59,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # MongoDB Configuration (with authentication)
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/talksy?authSource=admin
+      # Redis Configuration
       - REDIS_ENABLED=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -57,6 +85,8 @@ services:
         max-file: "3"
 
 volumes:
+  mongodb-prod-data:
+    driver: local
   redis-prod-data:
     driver: local
 

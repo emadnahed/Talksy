@@ -86,7 +86,9 @@ echo ""
 
 # Step 2: Start API server in background
 echo -e "${YELLOW}► Step 2: Starting API server...${NC}"
-REDIS_ENABLED=true REDIS_HOST=localhost REDIS_PORT=6379 npm run start:dev &
+MONGODB_ENABLED=true MONGODB_URI=mongodb://localhost:27017/talksy \
+REDIS_ENABLED=true REDIS_HOST=localhost REDIS_PORT=6379 \
+npm run start:dev &
 API_PID=$!
 
 # Wait for API to be ready

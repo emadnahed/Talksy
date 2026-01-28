@@ -4,75 +4,54 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
+import { User as UserSchema, UserDocument } from '@/database/schemas/user.schema';
 import { User } from './user.entity';
 import { IUser, ICreateUser } from './interfaces/user.interface';
 import { CacheService } from '@/cache/cache.service';
-import { RedisPoolService } from '@/redis/redis-pool.service';
 import { toCachedUser } from '@/cache/interfaces/cache.interface';
 
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
-  private readonly users = new Map<string, IUser>();
-  private readonly emailIndex = new Map<string, string>(); // email -> id
-  private readonly keyPrefix: string;
   private readonly bcryptRounds: number;
 
   constructor(
+    @InjectModel(UserSchema.name) private userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
     private readonly cacheService: CacheService,
-    private readonly redisPool: RedisPoolService,
   ) {
-    this.keyPrefix = this.configService.get<string>(
-      'REDIS_KEY_PREFIX',
-      'talksy:',
-    );
-    this.bcryptRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
-
-    if (!this.redisPool.isEnabled()) {
-      this.logger.warn(
-        'Redis disabled, using in-memory user storage. ' +
-        'WARNING: User data will NOT persist across restarts and will NOT be shared across instances. ' +
-        'This mode is ONLY suitable for development/testing with a single instance.'
-      );
-    }
+    // Explicitly parse as number - env vars are strings, bcrypt needs a number
+    const rounds = this.configService.get<string | number>('BCRYPT_ROUNDS', 12);
+    this.bcryptRounds = typeof rounds === 'string' ? parseInt(rounds, 10) : rounds;
   }
 
   /**
-   * Check if Redis is available for use
+   * Convert MongoDB document to IUser interface
    */
-  private isRedisAvailable(): boolean {
-    return this.redisPool.isAvailable();
-  }
-
-  private getUserKey(id: string): string {
-    return `${this.keyPrefix}user:${id}`;
-  }
-
-  private getEmailIndexKey(email: string): string {
-    return `${this.keyPrefix}user:email:${email.toLowerCase()}`;
-  }
-
-  private serializeUser(user: IUser): string {
-    return JSON.stringify({
-      ...user,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
-    });
-  }
-
-  private deserializeUser(data: string): IUser {
-    const parsed = JSON.parse(data);
+  private toIUser(doc: UserDocument): IUser {
     return {
-      ...parsed,
-      createdAt: new Date(parsed.createdAt),
-      updatedAt: new Date(parsed.updatedAt),
+      id: doc._id.toString(),
+      email: doc.email,
+      passwordHash: doc.passwordHash,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
     };
   }
 
+  /**
+   * Validate if string is a valid MongoDB ObjectId
+   */
+  private isValidObjectId(id: string): boolean {
+    return Types.ObjectId.isValid(id);
+  }
+
+  /**
+   * Create a new user
+   */
   async create(createUserDto: ICreateUser): Promise<User> {
     const email = createUserDto.email.toLowerCase();
 
@@ -82,40 +61,38 @@ export class UserService {
       throw new ConflictException('Email already registered');
     }
 
-    const now = new Date();
-    const user: IUser = {
-      id: uuidv4(),
-      email,
-      passwordHash: await bcrypt.hash(createUserDto.password, this.bcryptRounds),
-      createdAt: now,
-      updatedAt: now,
-    };
+    try {
+      const userDoc = new this.userModel({
+        email,
+        passwordHash: await bcrypt.hash(createUserDto.password, this.bcryptRounds),
+      });
 
-    const client = this.redisPool.getClient();
-    if (client) {
-      try {
-        await client.set(this.getUserKey(user.id), this.serializeUser(user));
-        await client.set(this.getEmailIndexKey(email), user.id);
-        this.logger.debug(`User ${user.id} created in Redis`);
-      } catch (error) {
-        this.logger.warn(
-          `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        this.users.set(user.id, user);
-        this.emailIndex.set(email, user.id);
+      const saved = await userDoc.save();
+      const user = this.toIUser(saved);
+
+      // Populate cache with new user
+      this.cacheService.setUser(toCachedUser(user));
+
+      this.logger.debug(`User ${user.id} created in MongoDB`);
+      return new User(user);
+    } catch (error: unknown) {
+      // Handle duplicate key error (race condition)
+      if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
+        throw new ConflictException('Email already registered');
       }
-    } else {
-      this.users.set(user.id, user);
-      this.emailIndex.set(email, user.id);
+      throw error;
     }
-
-    // Populate cache with new user
-    this.cacheService.setUser(toCachedUser(user));
-
-    return new User(user);
   }
 
+  /**
+   * Find user by ID
+   */
   async findById(id: string): Promise<User | null> {
+    // Validate ObjectId format
+    if (!this.isValidObjectId(id)) {
+      return null;
+    }
+
     // Check cache first
     const cached = this.cacheService.getUser(id);
     if (cached) {
@@ -123,37 +100,24 @@ export class UserService {
       return new User(cached);
     }
 
-    // Cache miss - fetch from storage
-    let user: IUser | null = null;
-    const client = this.redisPool.getClient();
-
-    if (client) {
-      try {
-        const data = await client.get(this.getUserKey(id));
-        if (data) {
-          user = this.deserializeUser(data);
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-      }
+    // Cache miss - query MongoDB
+    const doc = await this.userModel.findById(id);
+    if (!doc) {
+      return null;
     }
 
-    // Fallback to in-memory if Redis not available or failed
-    if (!user && !this.isRedisAvailable()) {
-      user = this.users.get(id) || null;
-    }
+    const user = this.toIUser(doc);
 
-    // Populate cache if found
-    if (user) {
-      this.cacheService.setUser(toCachedUser(user));
-      return new User(user);
-    }
+    // Populate cache
+    this.cacheService.setUser(toCachedUser(user));
+    this.logger.debug(`User ${id} found in MongoDB, cached`);
 
-    return null;
+    return new User(user);
   }
 
+  /**
+   * Find user by email
+   */
   async findByEmail(email: string): Promise<User | null> {
     const normalizedEmail = email.toLowerCase();
 
@@ -164,112 +128,105 @@ export class UserService {
       return this.findById(cachedUserId);
     }
 
-    // Cache miss - fetch from storage
-    const client = this.redisPool.getClient();
-    if (client) {
-      try {
-        const userId = await client.get(this.getEmailIndexKey(normalizedEmail));
-        if (!userId) return null;
-        return this.findById(userId);
-      } catch (error) {
-        this.logger.warn(
-          `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-      }
+    // Cache miss - query MongoDB
+    const doc = await this.userModel.findOne({ email: normalizedEmail });
+    if (!doc) {
+      return null;
     }
 
-    const userId = this.emailIndex.get(normalizedEmail);
-    if (!userId) return null;
-    return this.findById(userId);
+    const user = this.toIUser(doc);
+
+    // Populate cache
+    this.cacheService.setUser(toCachedUser(user));
+    this.logger.debug(`User found by email in MongoDB, cached`);
+
+    return new User(user);
   }
 
+  /**
+   * Validate user password
+   */
   async validatePassword(user: User, password: string): Promise<boolean> {
     return bcrypt.compare(password, user.passwordHash);
   }
 
+  /**
+   * Update user password
+   */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
-    const user = await this.findById(userId);
-    if (!user) {
+    if (!this.isValidObjectId(userId)) {
       throw new NotFoundException('User not found');
     }
 
-    const updatedUser: IUser = {
-      ...user,
-      passwordHash: await bcrypt.hash(newPassword, this.bcryptRounds),
-      updatedAt: new Date(),
-    };
-
-    const client = this.redisPool.getClient();
-    if (client) {
-      try {
-        await client.set(
-          this.getUserKey(userId),
-          this.serializeUser(updatedUser),
-        );
-      } catch (error) {
-        this.logger.warn(
-          `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-        this.users.set(userId, updatedUser);
-      }
-    } else {
-      this.users.set(userId, updatedUser);
+    const doc = await this.userModel.findById(userId);
+    if (!doc) {
+      throw new NotFoundException('User not found');
     }
+
+    doc.passwordHash = await bcrypt.hash(newPassword, this.bcryptRounds);
+    const updated = await doc.save();
+    const user = this.toIUser(updated);
 
     // Invalidate and refresh cache (password changed = security event)
     this.cacheService.invalidateUser(userId, user.email);
-    this.cacheService.setUser(toCachedUser(updatedUser));
+    this.cacheService.setUser(toCachedUser(user));
     // Also invalidate all tokens for this user (password change should invalidate sessions)
     this.cacheService.invalidateAllTokensForUser(userId);
+
+    this.logger.debug(`User ${userId} password updated`);
   }
 
+  /**
+   * Delete user
+   */
   async deleteUser(userId: string): Promise<boolean> {
-    const user = await this.findById(userId);
-    if (!user) return false;
-
-    // Invalidate cache first
-    this.cacheService.invalidateUser(userId, user.email);
-    this.cacheService.invalidateAllTokensForUser(userId);
-
-    const client = this.redisPool.getClient();
-    if (client) {
-      try {
-        await client.del(this.getUserKey(userId));
-        await client.del(this.getEmailIndexKey(user.email));
-        return true;
-      } catch (error) {
-        this.logger.warn(
-          `Redis error, falling back to in-memory: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-      }
+    if (!this.isValidObjectId(userId)) {
+      return false;
     }
 
-    this.users.delete(userId);
-    this.emailIndex.delete(user.email);
+    const doc = await this.userModel.findById(userId);
+    if (!doc) {
+      return false;
+    }
+
+    const email = doc.email;
+
+    // Invalidate cache first
+    this.cacheService.invalidateUser(userId, email);
+    this.cacheService.invalidateAllTokensForUser(userId);
+
+    // Delete from MongoDB
+    await this.userModel.deleteOne({ _id: userId });
+
+    this.logger.debug(`User ${userId} deleted`);
     return true;
   }
 
+  /**
+   * Check if MongoDB is being used (always true now)
+   */
   isUsingRedis(): boolean {
-    return this.isRedisAvailable();
+    // Keep for backwards compatibility - now always uses MongoDB
+    return false;
   }
 
-  // For testing purposes
+  /**
+   * Check if using MongoDB
+   */
+  isUsingMongoDB(): boolean {
+    return true;
+  }
+
+  /**
+   * Clear all users (for testing purposes only)
+   */
   async clearAllUsers(): Promise<void> {
     // Clear cache first
     this.cacheService.clearAll();
 
-    const client = this.redisPool.getClient();
-    if (client) {
-      try {
-        const userKeys = await client.keys(`${this.keyPrefix}user:*`);
-        if (userKeys.length > 0) {
-          await client.del(...userKeys);
-        }
-      } catch (error) {
-        this.logger.warn(`Failed to clear Redis users: ${error}`);
-      }
-    }
-    this.users.clear();
-    this.emailIndex.clear();
+    // Clear MongoDB collection
+    await this.userModel.deleteMany({});
+
+    this.logger.warn('All users cleared from MongoDB');
   }
 }

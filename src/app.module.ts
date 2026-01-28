@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { CacheModule } from './cache/cache.module';
 import { RedisModule } from './redis/redis.module';
+import { DatabaseModule } from './database/database.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
@@ -24,7 +25,8 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
       validationSchema: configValidationSchema,
     }),
     EventEmitterModule.forRoot(),
-    RedisModule, // Shared Redis connection pool - must be early
+    DatabaseModule, // MongoDB connection - must be early (before UserModule)
+    RedisModule, // Shared Redis connection pool for tokens/sessions
     CacheModule,
     StorageModule,
     RateLimitModule,

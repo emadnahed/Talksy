@@ -1,6 +1,22 @@
-version: '3.8'
-
 services:
+  # MongoDB service for user data
+  mongodb:
+    image: mongo:7
+    container_name: talksy-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=talksy
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talksy-network
+
   # Redis service for session storage
   redis:
     image: redis:7-alpine
@@ -29,6 +45,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+
+      # MongoDB configuration
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://mongodb:27017/talksy
 
       # Redis configuration
       - REDIS_ENABLED=true
@@ -62,6 +82,8 @@ services:
       - LOG_LEVEL=log
 
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -69,6 +91,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  mongodb-data:
+    driver: local
   redis-data:
     driver: local
 

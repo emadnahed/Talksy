@@ -1,10 +1,25 @@
-version: '3.8'
-
 # Test Docker Compose - for running tests with Docker infrastructure
 # Uses different ports to avoid conflicts with development
 # Usage: docker-compose -f docker/docker-compose.test.yml up
 
 services:
+  mongodb:
+    image: mongo:7
+    container_name: talksy-test-mongodb
+    ports:
+      - "27018:27017"
+    tmpfs:
+      - /data/db  # Use tmpfs for faster tests
+    environment:
+      - MONGO_INITDB_DATABASE=talksy_test
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talksy-test-network
+
   redis:
     image: redis:7-alpine
     container_name: talksy-test-redis
@@ -31,20 +46,31 @@ services:
     environment:
       - NODE_ENV=test
       - PORT=3000
+      # MongoDB Configuration
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://mongodb:27017/talksy_test
+      # Redis Configuration
       - REDIS_ENABLED=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Session Configuration
       - SESSION_TTL_MS=300000
       - SESSION_DISCONNECT_GRACE_MS=60000
+      # Rate Limiting (disabled for tests)
       - RATE_LIMIT_ENABLED=false
+      # Auth Configuration
       - AUTH_ENABLED=false
       - AUTH_BYPASS_IN_DEV=true
+      # Logging (minimal for tests)
       - LOG_LEVEL=warn
       - LOG_HTTP_REQUESTS=false
       - LOG_WS_EVENTS=false
+      # AI Configuration (mock for tests)
       - AI_PROVIDER=mock
       - AI_MOCK_RESPONSE_DELAY_MS=10
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
