@@ -29,7 +29,8 @@ Think of it as the **core engine behind ChatGPT-like assistants**, but simplifie
 - ✅ **Rate Limiting** — Sliding window abuse protection
 - ✅ **Horizontal Scaling** — Redis-backed for multi-instance deployment
 - ✅ **Production Logging** — Structured JSON with HTTP/WS middleware
-- ✅ **Comprehensive Testing** — 955+ tests with Jest, K6 load testing
+- ✅ **MongoDB Database** — User data persistence with Mongoose
+- ✅ **Comprehensive Testing** — 1,035+ tests with Jest, K6 load testing
 
 ---
 
@@ -63,6 +64,11 @@ Think of it as the **core engine behind ChatGPT-like assistants**, but simplifie
 │          │              Redis Cluster            │                          │
 │          │  (Sessions, Tokens, WebSocket Pub/Sub)│                          │
 │          └──────────────────────────────────────┘                          │
+│                             │                                              │
+│          ┌──────────────────────────────────────┐                          │
+│          │              MongoDB Cluster          │                          │
+│          │       (User Data, Persistence)        │                          │
+│          └──────────────────────────────────────┘                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -79,14 +85,17 @@ Think of it as the **core engine behind ChatGPT-like assistants**, but simplifie
 | **Session Management** | Auto-expiring sessions with reconnection support |
 | **Tool System** | Extensible, sandboxed tool execution framework |
 | **Storage Layer** | Redis with automatic fallback to in-memory |
+| **Database** | MongoDB with Mongoose ODM for user persistence |
 
 ### Module Architecture
 
 ```
 AppModule
 ├── ConfigModule (global)     → Environment validation with Joi
+├── DatabaseModule (global)   → MongoDB connection with Mongoose
 ├── CacheModule (global)      → In-memory LRU caching for auth
 ├── AuthModule                → JWT authentication, user management
+├── UserModule                → User CRUD with MongoDB persistence
 ├── SessionModule (global)    → Conversation session lifecycle
 ├── AIModule (global)         → Provider orchestration (Mock/OpenAI/Groq)
 ├── GatewayModule             → WebSocket event handling
@@ -112,11 +121,12 @@ AppModule
 | Backend Framework | NestJS 10.x |
 | Transport | WebSockets (Socket.IO 4.x) |
 | Language | TypeScript 5.x |
+| Database | MongoDB 7.x with Mongoose ODM |
 | AI Providers | OpenAI API, Groq API (Llama 3.1) |
 | Authentication | JWT, bcrypt, Passport.js |
 | Cache/Storage | Redis (ioredis) with in-memory fallback |
 | Validation | class-validator, Joi |
-| Testing | Jest, Supertest |
+| Testing | Jest, Supertest, K6 |
 | Architecture | Modular, horizontally scalable |
 
 ---
@@ -136,6 +146,11 @@ src/
 │   ├── auth.guard.ts            # JWT guard (HTTP + WebSocket)
 │   ├── dto/                     # Register, Login, Refresh DTOs
 │   └── interfaces/              # JWT payload, Auth user types
+│
+├── database/                    # 🗄️ Database Module
+│   ├── database.module.ts       # MongoDB connection config
+│   └── schemas/                 # Mongoose schemas
+│       └── user.schema.ts       # User document schema
 │
 ├── user/                        # 👤 User Module
 │   ├── user.service.ts          # User CRUD, bcrypt hashing
@@ -272,15 +287,20 @@ cp .env.example .env
 PORT=3000
 NODE_ENV=development
 
+# MongoDB (required)
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://localhost:27017/talksy
+
 # AI Provider (mock, openai, groq)
 AI_PROVIDER=mock
 OPENAI_API_KEY=sk-...          # For OpenAI
 GROQ_API_KEY=gsk_...           # For Groq (free tier)
 
 # Authentication
-JWT_SECRET=your-secret-key
+JWT_SECRET=your-secret-key     # Generate: openssl rand -base64 64
 JWT_ACCESS_EXPIRY=15m
 JWT_REFRESH_EXPIRY=7d
+BCRYPT_ROUNDS=12               # Use 4 for testing
 
 # Redis (optional, enables horizontal scaling)
 REDIS_ENABLED=false
@@ -307,7 +327,7 @@ ws://localhost:3000
 
 ## 🧪 Testing
 
-This project follows **strict Test-Driven Development (TDD)** with **955+ tests** achieving **90%+ coverage**.
+This project follows **strict Test-Driven Development (TDD)** with **1,035+ tests** achieving **90%+ coverage**.
 
 ### Quick Start
 ```bash
@@ -315,8 +335,8 @@ This project follows **strict Test-Driven Development (TDD)** with **955+ tests*
 npm run test:full:docker      # Handles infrastructure, runs all tests, cleans up
 
 # Or run tests individually
-npm run test:unit             # 737 unit tests
-npm run test:integration      # 132 integration tests
+npm run test:unit             # 776 unit tests
+npm run test:integration      # 173 integration tests
 npm run test:e2e              # 73 E2E tests
 npm run test:latency          # 13 latency/performance tests
 ```
@@ -325,11 +345,11 @@ npm run test:latency          # 13 latency/performance tests
 
 | Category | Tests | Command | Description |
 |----------|-------|---------|-------------|
-| Unit | 737 | `npm run test:unit` | Fast, isolated tests |
-| Integration | 132 | `npm run test:integration` | Service interaction tests |
+| Unit | 776 | `npm run test:unit` | Fast, isolated tests |
+| Integration | 173 | `npm run test:integration` | Service interaction tests |
 | E2E | 73 | `npm run test:e2e` | Full application flow tests |
 | Latency | 13 | `npm run test:latency` | Performance threshold tests |
-| **Total Jest** | **955** | `npm test` | All Jest tests |
+| **Total Jest** | **1,035** | `npm test` | All Jest tests |
 
 ### K6 Load Testing
 ```bash
@@ -459,13 +479,14 @@ This project includes production-grade features:
 | 🔐 Authentication | ✅ Done | JWT with refresh token rotation |
 | ⚡ Auth Caching | ✅ Done | In-memory LRU cache (~0.1ms lookups) |
 | 🚦 Rate Limiting | ✅ Done | Sliding window algorithm |
-| 🧠 Redis Storage | ✅ Done | Sessions, tokens, users |
+| 🗄️ MongoDB | ✅ Done | User persistence with authentication |
+| 🧠 Redis Storage | ✅ Done | Sessions, tokens, caching |
 | 📡 Streaming | ✅ Done | Token-by-token AI responses |
 | 📊 Logging | ✅ Done | Structured JSON, HTTP middleware |
 | 🔄 Horizontal Scaling | ✅ Done | Socket.IO Redis adapter |
 | 🔧 Tool System | ✅ Done | Sandboxed execution |
 | ⚡ Fallback | ✅ Done | Auto-fallback for Redis & AI |
-| 🧪 Testing | ✅ Done | 955+ tests, K6 load testing |
+| 🧪 Testing | ✅ Done | 1,035+ tests, K6 load testing |
 
 ---
 
@@ -489,11 +510,12 @@ This project demonstrates **production-grade patterns**:
 |--------|----------------|
 | **Architecture** | Modular NestJS with clear separation of concerns |
 | **Authentication** | JWT with refresh token rotation (industry standard) |
+| **Database** | MongoDB with Mongoose ODM, production-ready auth |
 | **Scalability** | Stateless tokens + Redis for horizontal scaling |
 | **AI Integration** | Provider abstraction with automatic fallback |
 | **Real-time** | WebSocket with session management |
 | **Security** | Rate limiting, input validation, bcrypt hashing |
-| **Testing** | 955+ tests with 90%+ coverage |
+| **Testing** | 1,035+ tests with 90%+ coverage |
 
 **Perfect for:**
 - Backend engineering portfolios

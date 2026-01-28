@@ -68,6 +68,11 @@
 │          │              Redis Cluster            │                          │
 │          │  (Sessions, Tokens, WebSocket Pub/Sub)│                          │
 │          └──────────────────────────────────────┘                          │
+│                             │                                              │
+│          ┌──────────────────────────────────────┐                          │
+│          │            MongoDB Cluster            │                          │
+│          │       (User Data, Persistence)        │                          │
+│          └──────────────────────────────────────┘                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -76,6 +81,7 @@
 
 - **JWT Authentication** - Stateless access tokens for horizontal scaling
 - **Auth Caching Layer** - In-memory LRU cache for reduced auth latency
+- **MongoDB Database** - User persistence with Mongoose ODM
 - **Real-time Communication** - WebSocket-based messaging with Socket.IO
 - **Multiple AI Providers** - Pluggable architecture (Mock, OpenAI, Groq)
 - **Tool System** - Extensible, sandboxed tool execution
@@ -442,12 +448,13 @@ These are checkpoints that requests pass through:
 | **Framework** | NestJS 10.x |
 | **Language** | TypeScript 5.x |
 | **Runtime** | Node.js 18+ |
+| **Database** | MongoDB 7.x with Mongoose ODM |
 | **WebSocket** | Socket.IO 4.x |
 | **Cache/Storage** | Redis (ioredis), In-memory LRU |
 | **Authentication** | JWT (nestjs/jwt), bcrypt 6.x, Passport.js |
 | **Validation** | class-validator, class-transformer, Joi |
 | **AI Providers** | OpenAI API, Groq API |
-| **Testing** | Jest 29, Supertest, K6, Autocannon |
+| **Testing** | Jest 29, Supertest, K6 (1,035+ tests) |
 | **Infrastructure** | Docker, Docker Compose |
 
 ---
@@ -1454,6 +1461,12 @@ OPENAI_MODEL=gpt-3.5-turbo
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=llama-3.1-8b-instant
 
+# MongoDB (required for user persistence)
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://localhost:27017/talksy
+# Production with auth:
+# MONGODB_URI=mongodb://user:password@host:27017/talksy?authSource=admin
+
 # Redis
 REDIS_ENABLED=false
 REDIS_HOST=localhost
@@ -1520,15 +1533,15 @@ LOG_HTTP_REQUESTS=true
 │              │   (HTTP + WebSocket flows)    │    (Jest)        │
 │              └───────────────┬───────────────┘                  │
 │        ┌─────────────────────┴─────────────────────┐            │
-│        │      Integration Tests (132 tests)        │  ← Module  │
-│        │    (Service + Storage interactions)       │    (Jest)  │
+│        │      Integration Tests (173 tests)        │  ← Module  │
+│        │    (Service + MongoDB interactions)       │    (Jest)  │
 │        └─────────────────────┬─────────────────────┘            │
 │  ┌───────────────────────────┴───────────────────────────┐      │
-│  │              Unit Tests (737 tests)                    │     │
+│  │              Unit Tests (776 tests)                    │     │
 │  │      (Business logic, utilities, edge cases)          │     │
 │  └───────────────────────────────────────────────────────┘      │
 │                                                                  │
-│  Total: 955+ Jest Tests + K6 Scenarios                          │
+│  Total: 1,035 Jest Tests + K6 Scenarios                         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -1537,11 +1550,12 @@ LOG_HTTP_REQUESTS=true
 
 | Category | Count | Focus |
 |----------|-------|-------|
-| **Unit Tests** | 737 | Business logic, utilities |
-| **Integration Tests** | 132 | Service interactions |
+| **Unit Tests** | 776 | Business logic, utilities |
+| **Integration Tests** | 173 | Service + MongoDB interactions |
 | **E2E Tests** | 73 | API contracts, flows |
 | **Latency Tests** | 13 | Performance benchmarks |
 | **K6 Scenarios** | 6+ | Load testing, stress testing |
+| **Total** | **1,035** | Full test coverage |
 
 ### K6 Load Test Scenarios
 

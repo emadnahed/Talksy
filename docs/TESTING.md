@@ -29,13 +29,13 @@ Talksy uses a tiered testing strategy to ensure code quality while maintaining f
 ┌─────────────────────────────────────────────────────────────────┐
 │  TIER 1: Unit Tests (No Infrastructure Required)                │
 │  Fast, isolated tests that mock all external dependencies       │
-│  Command: npm run test:unit (737 tests)                         │
+│  Command: npm run test:unit (776 tests)                         │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  TIER 2: Integration Tests (Optional Redis)                     │
+│  TIER 2: Integration Tests (MongoDB Memory Server)              │
 │  Tests service interactions with real module coordination       │
-│  Command: npm run test:integration (132 tests)                  │
+│  Command: npm run test:integration (173 tests)                  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -98,17 +98,17 @@ These commands handle infrastructure startup, run all tests, and cleanup automat
 
 | Command | Description |
 |---------|-------------|
-| `npm run test:unit` | Run 737 unit tests (fast, isolated) |
+| `npm run test:unit` | Run 776 unit tests (fast, isolated) |
 
 ### Jest Tests
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all Jest tests (955 total) |
+| `npm test` | Run all Jest tests (1,035 total) |
 | `npm run test:watch` | Watch mode for development |
 | `npm run test:cov` | Generate coverage report |
 | `npm run test:ci` | CI pipeline (with coverage + force exit) |
-| `npm run test:integration` | Integration tests only (132 tests) |
+| `npm run test:integration` | Integration tests only (173 tests) |
 | `npm run test:e2e` | E2E tests (73 tests) |
 | `npm run test:latency` | Latency/performance tests (13 tests) |
 | `npm run test:jest:local` | Unit + Integration + E2E combined |
@@ -339,11 +339,22 @@ test/
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `NODE_ENV` | `development` | Environment mode |
+| `MONGODB_ENABLED` | `true` | Enable MongoDB (uses memory server in tests) |
 | `REDIS_ENABLED` | `false` | Enable Redis adapter |
 | `REDIS_HOST` | `localhost` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |
 | `AUTH_ENABLED` | `false` | Enable API key auth |
 | `RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
+| `BCRYPT_ROUNDS` | `4` (test) | bcrypt hashing rounds (use 12 in prod) |
+
+### Test Environment Setup
+
+Tests automatically configure the following via `test/jest.setup.ts`:
+- `BCRYPT_ROUNDS=4` for faster bcrypt hashing
+- `NODE_ENV=test` for test mode
+- 30 second default timeout for async operations
+
+Integration tests use `mongodb-memory-server` for isolated database testing.
 
 ---
 
@@ -464,11 +475,11 @@ Coverage report is generated in `coverage/` directory:
 
 | Category | Tests |
 |----------|-------|
-| Unit Tests | 737 |
-| Integration Tests | 132 |
+| Unit Tests | 776 |
+| Integration Tests | 173 |
 | E2E Tests | 73 |
 | Latency Tests | 13 |
-| **Total Jest** | **955** |
+| **Total Jest** | **1,035** |
 
 ### K6 Load Test Scenarios
 

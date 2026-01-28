@@ -3,6 +3,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
 /**
+ * Check if MongoDB is enabled from config
+ * Handles both boolean and string values from environment variables
+ */
+function isMongoEnabled(configService: ConfigService): boolean {
+  return String(configService.get('MONGODB_ENABLED', 'true')) === 'true';
+}
+
+/**
  * Global Database Module for MongoDB connection
  * Provides MongoDB connection pool shared across all modules
  */
@@ -13,14 +21,14 @@ import { MongooseModule } from '@nestjs/mongoose';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const enabled =
-          configService.get<boolean | string>('MONGODB_ENABLED', true) === true ||
-          configService.get<boolean | string>('MONGODB_ENABLED', true) === 'true';
+        const enabled = isMongoEnabled(configService);
 
         if (!enabled) {
-          // Return empty config - will be handled by module initialization
+          // Return a config that will fail fast and quietly if MongoDB is disabled
           return {
-            uri: 'mongodb://localhost:27017/talksy-disabled',
+            uri: 'mongodb://localhost:59999/disabled',
+            serverSelectionTimeoutMS: 1,
+            connectTimeoutMS: 1,
           };
         }
 
@@ -46,9 +54,7 @@ export class DatabaseModule implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
-    const enabled =
-      this.configService.get<boolean | string>('MONGODB_ENABLED', true) === true ||
-      this.configService.get<boolean | string>('MONGODB_ENABLED', true) === 'true';
+    const enabled = isMongoEnabled(this.configService);
 
     if (enabled) {
       const uri = this.configService.get<string>('MONGODB_URI', '');
