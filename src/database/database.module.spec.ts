@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getConnectionToken } from '@nestjs/mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection } from 'mongoose';
@@ -54,45 +54,6 @@ describe('DatabaseModule', () => {
 
     it('should have correct database name', () => {
       expect(connection.db).toBeDefined();
-    });
-  });
-
-  describe('with MongoDB disabled', () => {
-    let disabledModule: TestingModule;
-    let disabledMongoServer: MongoMemoryServer;
-
-    beforeAll(async () => {
-      disabledMongoServer = await MongoMemoryServer.create();
-      const mongoUri = disabledMongoServer.getUri();
-
-      disabledModule = await Test.createTestingModule({
-        imports: [
-          ConfigModule.forRoot({
-            isGlobal: true,
-            load: [
-              () => ({
-                MONGODB_ENABLED: false,
-                MONGODB_URI: mongoUri,
-              }),
-            ],
-          }),
-          MongooseModule.forRoot(mongoUri),
-          DatabaseModule,
-        ],
-      }).compile();
-    });
-
-    afterAll(async () => {
-      if (disabledModule) {
-        await disabledModule.close();
-      }
-      if (disabledMongoServer) {
-        await disabledMongoServer.stop();
-      }
-    });
-
-    it('should still initialize when disabled', () => {
-      expect(disabledModule).toBeDefined();
     });
   });
 

@@ -262,21 +262,45 @@ describe('AppService', () => {
       });
 
       it('should return degraded when redis is degraded', async () => {
+        const originalMemoryUsage = process.memoryUsage;
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
+          heapUsed: 50000000, // 50MB
+          heapTotal: 100000000, // 100MB (50% usage - healthy)
+          rss: 150000000,
+          external: 0,
+          arrayBuffers: 0,
+        });
+
         mockStorageService.isUsingRedis.mockReturnValue(false);
         mockStorageService.isUsingFallback.mockReturnValue(true);
 
         const result = await service.getDetailedHealth();
 
         expect(result.status).toBe('degraded');
+        process.memoryUsage = originalMemoryUsage;
       });
 
       it('should return unhealthy when redis is unhealthy', async () => {
+        const originalMemoryUsage = process.memoryUsage;
+        (
+          process as unknown as { memoryUsage: () => NodeJS.MemoryUsage }
+        ).memoryUsage = () => ({
+          heapUsed: 50000000, // 50MB
+          heapTotal: 100000000, // 100MB (50% usage - healthy)
+          rss: 150000000,
+          external: 0,
+          arrayBuffers: 0,
+        });
+
         mockStorageService.isUsingRedis.mockReturnValue(true);
         mockStorageService.isHealthy.mockResolvedValue(false);
 
         const result = await service.getDetailedHealth();
 
         expect(result.status).toBe('unhealthy');
+        process.memoryUsage = originalMemoryUsage;
       });
     });
   });
