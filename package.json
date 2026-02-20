@@ -100,9 +100,13 @@
     "test:run:vps": "./scripts/test-orchestrator/run-remote.sh vps",
     "test:run:staging": "./scripts/test-orchestrator/run-remote.sh staging",
     "test:run:production": "./scripts/test-orchestrator/run-remote.sh production",
-    "deploy:vps": "./scripts/deploy/deploy-remote.sh vps",
-    "deploy:staging": "./scripts/deploy/deploy-remote.sh staging",
-    "deploy:production": "./scripts/deploy/deploy-remote.sh production",
+    "deploy": "./scripts/deploy.sh all",
+    "deploy:prod": "./scripts/deploy.sh production",
+    "deploy:staging": "./scripts/deploy.sh staging",
+    "deploy:status": "./scripts/deploy.sh status",
+    "deploy:remote:vps": "./scripts/deploy/deploy-remote.sh vps",
+    "deploy:remote:staging": "./scripts/deploy/deploy-remote.sh staging",
+    "deploy:remote:production": "./scripts/deploy/deploy-remote.sh production",
     "status": "./scripts/infra/status.sh"
   },
   "dependencies": {

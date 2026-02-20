@@ -1,0 +1,62 @@
+# docker-compose.staging.yml — Staging overrides
+# Usage: docker compose -p talksy-staging -f docker-compose.base.yml -f docker-compose.staging.yml --env-file .env.staging up -d --build
+
+services:
+  mongodb:
+    container_name: talksy-staging-mongodb
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - talksy-staging-mongodb-data:/data/db
+    networks:
+      - talksy-staging-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  redis:
+    container_name: talksy-staging-redis
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - talksy-staging-redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 32mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    networks:
+      - talksy-staging-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  app:
+    container_name: talksy-staging-app
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env.staging
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/talksy_staging?authSource=admin
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - talksy-staging-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+volumes:
+  talksy-staging-mongodb-data:
+    driver: local
+  talksy-staging-redis-data:
+    driver: local
+
+networks:
+  talksy-staging-network:
+    driver: bridge

@@ -1,0 +1,61 @@
+# docker-compose.prod.yml — Production overrides
+# Usage: docker compose -p talksy-prod -f docker-compose.base.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+services:
+  mongodb:
+    container_name: talksy-prod-mongodb
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - talksy-prod-mongodb-data:/data/db
+    networks:
+      - talksy-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  redis:
+    container_name: talksy-prod-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - talksy-prod-redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 48mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    networks:
+      - talksy-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  app:
+    container_name: talksy-prod-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/talksy?authSource=admin
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - talksy-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  talksy-prod-mongodb-data:
+    driver: local
+  talksy-prod-redis-data:
+    driver: local
+
+networks:
+  talksy-prod-network:
+    driver: bridge

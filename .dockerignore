@@ -18,6 +18,8 @@ test
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.staging
 
 # IDE
 .vscode
